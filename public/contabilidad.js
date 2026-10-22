@@ -30,7 +30,7 @@ function avisos(lista) {
 async function vistaInventario() {
   const inv = await H.api('/inventario');
   H.vista.innerHTML = `
-    <h1>Inventario de café</h1>
+    <h1>Inventario</h1>
     <p class="suave">Lo que hay hoy en cada estado, valorizado al costo real de cada lote (no al precio de venta).</p>
     <div class="cifras">
       ${cifra(`${H.fmt(inv.total_kg, 1)} kg`, 'café en inventario')}
@@ -47,7 +47,7 @@ async function vistaInventario() {
           <td class="num"><b>${H.fmt(e.kg, 2)}</b></td>
           <td class="num">${pesos(e.cop_por_kg)}</td>
           <td class="num">${pesos(e.valor_cop)}</td></tr>`),
-    { vacio: 'Todavía no hay café registrado. Empiece creando un lote en "Lotes de café".' },
+    { vacio: 'Todavía no hay café registrado. Empiece registrando una compra con el botón +.' },
   )}
     </section>
 
@@ -75,7 +75,8 @@ async function vistaInventario() {
 async function vistaCostos() {
   const { datos: lotes } = await H.api('/costos/lotes');
   H.vista.innerHTML = `
-    <h1>Costo por lote y por proceso</h1>
+    <h1>Costos</h1>
+    <p class="suave">Cuánto cuesta cada kilo en cada paso, lote por lote.</p>
     <p class="suave">Cada proceso le suma costo y le quita kg al lote. El costo por kg en cada estado es costo acumulado ÷ kg que realmente salieron.</p>
     ${tabla(
     ['Lote', 'Estado', { t: 'COP/kg', num: true }, { t: 'Disponible', num: true }, { t: '!', num: true }],
@@ -229,7 +230,7 @@ async function vistaPrecios() {
   const { datos: lotes } = await H.api('/costos/lotes');
   const gg = await H.api('/costos/gastos-por-kg');
   H.vista.innerHTML = `
-    <h1>Precio de venta recomendado</h1>
+    <header class="titulo-grande con-accion"><h1>Precios</h1><a class="boton" href="#/presentaciones">Productos ›</a></header>
     <p class="suave">El margen se calcula sobre el precio de venta: precio = costo ÷ (1 − margen). Sumarle un 40 % al costo no es ganar 40 %.</p>
     <div class="herramientas">
       <div><label for="p-lote">Lote</label><select id="p-lote">${lotes.map((l) => `<option value="${l.id}">${H.esc(l.codigo)} · ${H.esc(l.fecha)}</option>`).join('')}</select></div>
@@ -290,7 +291,7 @@ async function vistaPrecios() {
               <td>${H.esc(c.nombre)}<br><span class="suave pequeno">margen ${H.fmt(c.margen_objetivo_pct, 0)} %</span></td>
               <td class="num"><b>${pesos(c.precio_sugerido_cop)}</b><br><span class="suave pequeno">${c.precio_con_iva_cop ? `con IVA ${pesos(c.precio_con_iva_cop)}` : `${pesos(c.precio_cop_kg)}/kg`}</span></td>
               <td class="num">${pesos(c.margen_cop)}</td></tr>`))}
-        </details>`)).join('') : '<div class="alerta media">No hay presentaciones activas. Cree al menos una en "Presentaciones" (p. ej. bolsa de 250 g molido) con su costo de empaque.</div>'}
+        </details>`)).join('') : '<div class="alerta media">No hay productos activos. Cree al menos una en <a href="#/presentaciones">Productos</a> (p. ej. bolsa de 250 g molido) con su costo de empaque.</div>'}
       <p class="suave pequeno">${H.esc(r.aviso)}</p>`;
   };
 
@@ -461,7 +462,8 @@ async function vistaRegistrar() {
 
   if (!RP.lotes.length) {
     H.vista.innerHTML = `<h1>Registrar proceso</h1>
-      <div class="alerta media">No hay lotes de café. Cree el primero en <a href="#/lotes_cafe">Lotes de café</a> con los kg y el precio que pagó.</div>`;
+      <div class="alerta media">Todavía no hay café para procesar. Registre primero la compra: los kg y el precio que pagó.<br><button type="button" class="primario" data-compra style="margin-top:10px">Registrar compra</button></div>`;
+    H.vista.querySelector('[data-compra]').addEventListener('click', () => H.abrirFormulario('lotes_cafe', null, vistaRegistrar));
     return;
   }
 

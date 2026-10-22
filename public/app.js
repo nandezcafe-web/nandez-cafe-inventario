@@ -59,17 +59,22 @@ async function api(ruta, { metodo = 'GET', cuerpo, formData } = {}) {
 // se puede pegar, se puede corregir y dice dónde encontrarla.
 function pantallaAcceso(aviso = '') {
   $('#nav').innerHTML = '';
+  $('#pestanas').innerHTML = '';
   $('#subnav').innerHTML = '';
   vista.innerHTML = `
-    <h1>Clave de acceso</h1>
-    <p class="suave">Cada persona tiene su propia clave, y con ella queda marcado quién registró cada cosa. Viene en el enlace personal que le mandó Maick; si no lo tiene, pídaselo. Se pide una sola vez en cada celular o computador.</p>
-    ${aviso ? `<div class="alerta alta">${esc(aviso)}</div>` : ''}
-    <form class="tarjeta" id="f-acceso">
-      <label for="ac-token">Clave</label>
-      <input id="ac-token" name="token" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <p class="ayuda">Péguela completa, sin espacios al principio ni al final.</p>
-      <button class="primario" style="margin-top:10px">Entrar</button>
-    </form>`;
+    <div class="acceso">
+      <div class="acceso-logo" aria-hidden="true">☕</div>
+      <h1>Nández Café</h1>
+      <p class="suave">Entre con su clave personal. Viene en el enlace que le mandó Maick; si no lo tiene, pídaselo. Se pide una sola vez en cada celular.</p>
+      ${aviso ? `<div class="alerta alta">${esc(aviso)}</div>` : ''}
+      <form id="f-acceso">
+        <div class="lista"><div class="fila fila-campo">
+          <label for="ac-token" class="oculto">Clave</label>
+          <input id="ac-token" name="token" type="text" placeholder="Clave" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        </div></div>
+        <button class="primario ancho-total">Entrar</button>
+      </form>
+    </div>`;
 
   $('#f-acceso').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -89,50 +94,78 @@ function pantallaAcceso(aviso = '') {
 
 // ---------- Navegación ----------
 
-// Navegación en dos niveles. Arriba, cinco áreas que siempre se ven completas,
-// incluso en un celular. Dentro de cada área, solo sus secciones. Así el menú
-// deja de ser una tira de 30 enlaces que hay que arrastrar para leer.
+// Cuatro pestañas y un botón para registrar, como una app de iPhone:
+//   Hoy · Café · [+] · Dinero · Campo
+// Café y Dinero tienen cuatro secciones cada una, en un control segmentado
+// arriba de la página. Campo junta el cultivo, la biomasa y la finca: su
+// portada es una lista agrupada y cada sección abre con "‹ Campo" para volver.
+// Lo que se usa poco (Registrar, Productos) no ocupa un segmento: se llega
+// desde el botón + o desde la página que lo necesita.
+const GRUPOS_CAMPO = [
+  ['Finca', [
+    ['lotes', 'Lotes', 'Plantas, variedad y estado de cada lote'],
+    ['mapa', 'Mapa', 'Los lotes, el clima y los vuelos sobre el mapa'],
+    ['fincas', 'Datos de la finca'],
+    ['productores', 'Productores', 'A quién se le compra y quién nos vende'],
+  ]],
+  ['Cultivo', [
+    ['plan', 'Plan del mes', 'Qué toca hacer y cuándo, según el clima'],
+    ['plan_labores', 'Tareas'],
+    ['actividades', 'Labores hechas'],
+    ['observaciones', 'Observaciones', 'Plagas, enfermedades, lo que se vio'],
+    ['floraciones', 'Floraciones'],
+    ['cosechas', 'Cosechas'],
+  ]],
+  ['Clima y suelo', [
+    ['prediccion', 'Predicción y riesgos', 'Lluvia, roya y broca para los próximos días'],
+    ['clima', 'Clima'],
+    ['suelo', 'Análisis de suelo'],
+    ['vuelos', 'Vuelos de dron'],
+  ]],
+  ['Biomasa', [
+    ['tengo', 'Tengo X kg de…', 'Qué se puede hacer con un subproducto'],
+    ['subproductos', 'Partidas'],
+    ['logistica', 'Costo puesto en planta'],
+    ['oportunidades', 'Oportunidades'],
+    ['ranking', 'Ranking de oportunidades'],
+  ]],
+];
+
 const AREAS = [
+  { id: 'hoy', etiqueta: 'Hoy', inicio: 'resumen', secciones: [] },
   {
-    id: 'hoy', etiqueta: 'Hoy', inicio: 'resumen',
-    secciones: [],
+    id: 'cafe', etiqueta: 'Café', inicio: 'inventario',
+    secciones: [['inventario', 'Inventario'], ['lotes_cafe', 'Compras'], ['procesos_cafe', 'Procesos'], ['costos', 'Costos']],
+    ocultas: [['registrar', 'Registrar proceso']],
   },
   {
-    id: 'cafe', etiqueta: 'Café', inicio: 'registrar',
-    secciones: [
-      ['registrar', 'Registrar'], ['inventario', 'Inventario'], ['costos', 'Costos'], ['precios', 'Precios'],
-      ['ventas', 'Ventas'], ['gastos', 'Gastos'], ['pyg', 'Resultados'],
-      ['lotes_cafe', 'Lotes'], ['procesos_cafe', 'Procesos'], ['presentaciones', 'Presentaciones'],
-    ],
+    id: 'dinero', etiqueta: 'Dinero', inicio: 'pyg',
+    secciones: [['pyg', 'Resultados'], ['ventas', 'Ventas'], ['gastos', 'Gastos'], ['precios', 'Precios']],
+    ocultas: [['presentaciones', 'Productos']],
   },
   {
-    id: 'cultivo', etiqueta: 'Cultivo', inicio: 'cultivo',
-    secciones: [
-      ['cultivo', 'Resumen'],
-      ['plan', 'Plan'], ['plan_labores', 'Tareas'], ['actividades', 'Labores'], ['observaciones', 'Observaciones'],
-      ['floraciones', 'Floraciones'], ['cosechas', 'Cosechas'],
-      ['prediccion', 'Predicción'], ['clima', 'Clima'], ['suelo', 'Suelo'], ['vuelos', 'Vuelos'], ['mapa', 'Mapa'],
-    ],
-  },
-  {
-    id: 'biomasa', etiqueta: 'Biomasa', inicio: 'tengo',
-    secciones: [
-      ['tengo', 'Tengo X kg de…'], ['subproductos', 'Partidas'], ['logistica', 'Costo en planta'],
-      ['oportunidades', 'Oportunidades'], ['ranking', 'Ranking'],
-    ],
-  },
-  {
-    id: 'finca', etiqueta: 'Finca', inicio: 'lotes',
-    secciones: [['lotes', 'Lotes'], ['fincas', 'Datos de la finca'], ['productores', 'Productores']],
+    id: 'campo', etiqueta: 'Campo', inicio: 'campo', secciones: [],
+    ocultas: GRUPOS_CAMPO.flatMap(([, filas]) => filas.map(([id, et]) => [id, et])),
   },
 ];
 
-const areaDe = (seccion) => AREAS.find((a) => a.inicio === seccion || a.secciones.some(([s]) => s === seccion));
+// Íconos de línea, al estilo de los de iOS: un solo trazo, esquinas redondas.
+const ICONOS = {
+  hoy: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
+  cafe: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5c0 1 1 1.5 1 2.5s-1 1.5-1 2.5M12 3.5c0 1 1 1.5 1 2.5s-1 1.5-1 2.5"/>',
+  dinero: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v.01M17.5 14.5v.01"/>',
+  campo: '<path d="M6 19c0-7 4-12 13-14-1 9-6 13-12 13"/><path d="M6 19c2.5-4 5-6.5 9-9"/>',
+  mas: '<path d="M12 6v12M6 12h12"/>',
+};
+const icono = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONOS[n]}</svg>`;
+
+const areaDe = (seccion) => AREAS.find((a) => a.inicio === seccion
+  || a.secciones.some(([s]) => s === seccion) || a.ocultas?.some(([s]) => s === seccion));
 
 // Cada área recuerda en qué sección se quedó, para volver donde se iba.
 const ultimaSeccion = {};
-// Indicadores que se pintan sobre las áreas (se refrescan con el resumen).
-let indicadores = { hoy: 0, cultivo: 0 };
+// Indicadores que se pintan sobre las pestañas (se refrescan con el resumen).
+let indicadores = { hoy: 0, campo: 0 };
 let indicadoresEn = 0;
 
 function pintarNav(actual) {
@@ -143,22 +176,74 @@ function pintarNav(actual) {
   if (area) ultimaSeccion[area.id] = actual;
   const activa = area ?? AREAS[0];
 
-  $('#nav').innerHTML = AREAS.map((a) => {
-    const destino = ultimaSeccion[a.id] ?? a.inicio;
+  const pestana = (a) => {
     const n = indicadores[a.id] ?? 0;
-    const punto = n ? `<span class="punto ${a.id === 'cultivo' ? 'media' : ''}" aria-label="${n} para revisar">${n > 9 ? '9+' : n}</span>` : '';
-    return `<a href="#/${destino}" ${area && a.id === area.id ? 'aria-current="true"' : ''}>${esc(a.etiqueta)}${punto}</a>`;
-  }).join('');
+    const punto = n ? `<span class="punto ${a.id === 'campo' ? 'media' : ''}" aria-label="${n} para revisar">${n > 9 ? '9+' : n}</span>` : '';
+    return `<a href="#/${ultimaSeccion[a.id] ?? a.inicio}" ${a === activa ? 'aria-current="page"' : ''}>
+      <span class="ico">${icono(a.id)}${punto}</span><span class="txt">${esc(a.etiqueta)}</span></a>`;
+  };
+  const mas = `<button type="button" class="pestana-mas" data-registrar aria-label="Registrar algo">
+    <span class="ico">${icono('mas')}</span><span class="txt">Registrar</span></button>`;
+  const html = [pestana(AREAS[0]), pestana(AREAS[1]), mas, pestana(AREAS[2]), pestana(AREAS[3])].join('');
+  $('#nav').innerHTML = html;
+  $('#pestanas').innerHTML = html;
+  document.querySelectorAll('[data-registrar]').forEach((b) => b.addEventListener('click', abrirHojaRegistrar));
 
+  // Debajo del título: el control segmentado del área, o "‹ Volver" en una
+  // sección que no tiene segmento propio.
   const sub = $('#subnav');
-  sub.innerHTML = activa.secciones
-    .map(([id, et]) => `<a href="#/${id}" ${id === actual ? 'aria-current="page"' : ''}>${esc(et ?? esquema.recursos[id].etiqueta)}</a>`)
-    .join('');
-  const activo = $('#subnav [aria-current]');
-  if (activo) sub.scrollLeft = activo.offsetLeft - sub.clientWidth / 2 + activo.clientWidth / 2;
+  const enSegmento = activa.secciones.some(([s]) => s === actual);
+  if (enSegmento) {
+    sub.innerHTML = `<div class="segmentado-ios" role="tablist">${activa.secciones
+      .map(([id, et]) => `<a role="tab" href="#/${id}" ${id === actual ? 'aria-selected="true"' : ''}>${esc(et)}</a>`).join('')}</div>`;
+  } else if (area && actual !== area.inicio && area.id !== 'hoy') {
+    const volver = area.id === 'campo' ? ['campo', 'Campo']
+      : area.id === 'dinero' ? ['precios', 'Precios'] : ['inventario', 'Café'];
+    sub.innerHTML = `<a class="volver" href="#/${volver[0]}">‹ ${esc(volver[1])}</a>`;
+  } else {
+    sub.innerHTML = '';
+  }
 }
 
-// Alertas altas y lotes con avisos: se muestran como número sobre el área.
+// La hoja del botón +: todo lo que se registra, en un solo lugar.
+const OPCIONES_REGISTRAR = [
+  ['Café', [
+    ['proceso', 'Proceso', 'Trilla, tueste, molienda'],
+    ['lotes_cafe', 'Compra de café', 'Un lote que entra: kg y precio'],
+  ]],
+  ['Dinero', [
+    ['ventas', 'Venta', 'Bolsas o kilos que salieron'],
+    ['gastos', 'Gasto', 'Empaque, transporte, servicios'],
+  ]],
+  ['Campo', [
+    ['actividades', 'Labor en la finca', 'Abonada, fumigada, plateo…'],
+    ['observaciones', 'Observación', 'Algo que se vio en un lote'],
+  ]],
+];
+
+function abrirHojaRegistrar() {
+  const hoja = $('#hoja');
+  hoja.innerHTML = `
+    <div class="hoja-asa" aria-hidden="true"></div>
+    <div class="hoja-cab"><h2 id="hoja-titulo">Registrar</h2><button type="button" class="enlace" data-cerrar>Cerrar</button></div>
+    ${OPCIONES_REGISTRAR.map(([grupo, ops]) => `
+      <p class="lista-titulo">${esc(grupo)}</p>
+      <div class="lista">${ops.map(([id, t, d]) => `
+        <button type="button" class="fila" data-op="${id}">
+          <span class="fila-txt"><b>${esc(t)}</b><span>${esc(d)}</span></span><span class="chevron" aria-hidden="true">›</span>
+        </button>`).join('')}</div>`).join('')}`;
+  hoja.querySelector('[data-cerrar]').addEventListener('click', () => hoja.close());
+  hoja.addEventListener('click', (ev) => { if (ev.target === hoja) hoja.close(); }, { once: true });
+  hoja.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => {
+    hoja.close();
+    const op = b.dataset.op;
+    if (op === 'proceso') location.hash = '#/registrar';
+    else abrirFormulario(op, null, enrutar);
+  }));
+  hoja.showModal();
+}
+
+// Alertas altas y lotes con avisos: se muestran como número sobre la pestaña.
 async function refrescarIndicadores(resumen) {
   // /api/resumen recalcula la cadena de costos de todos los lotes: es la
   // consulta más pesada. Si una vista acaba de traerla, no se pide de nuevo.
@@ -166,11 +251,11 @@ async function refrescarIndicadores(resumen) {
   try {
     const r = resumen ?? await api('/resumen');
     indicadoresEn = Date.now();
-    // El número sobre "Hoy" cuenta solo lo del café; el del cultivo va sobre su
-    // propia área, para que ninguno de los dos tape al otro.
+    // El número sobre "Hoy" cuenta solo lo del café; el del cultivo va sobre
+    // Campo, para que ninguno de los dos tape al otro.
     indicadores = {
       hoy: r.alertas.filter((a) => a.grupo === 'cafe' && a.nivel !== 'info').length,
-      cultivo: r.alertas.filter((a) => a.grupo !== 'cafe' && a.nivel === 'alta').length,
+      campo: r.alertas.filter((a) => a.grupo !== 'cafe' && a.nivel === 'alta').length,
     };
     const [, id = 'resumen'] = location.hash.split('/');
     pintarNav(id);
@@ -178,12 +263,13 @@ async function refrescarIndicadores(resumen) {
 }
 
 async function enrutar() {
-  const [, id = 'resumen'] = location.hash.split('/');
+  let [, id = 'resumen'] = location.hash.split('/');
+  if (id === 'cultivo') id = 'campo'; // dirección vieja
   pintarNav(id);
-  vista.innerHTML = '<p class="suave">Cargando…</p>';
+  vista.innerHTML = '<p class="cargando" aria-label="Cargando"><span></span><span></span><span></span></p>';
   try {
     if (id === 'resumen') await vistaResumen();
-    else if (id === 'cultivo') await vistaCultivo();
+    else if (id === 'campo') await vistaCampo();
     else if (id === 'mapa') await (await import('./mapa.js')).vistaMapa({ vista, api, esc, fmt, avisar, abrirFormulario });
     else if (id === 'prediccion') await vistaPrediccion();
     else if (id === 'plan') await vistaPlan();
@@ -197,14 +283,15 @@ async function enrutar() {
     }
     else if (esquema.recursos[id]) await vistaRecurso(id);
     else {
-      vista.innerHTML = `<h1>Sección no encontrada</h1>
-        <div class="alerta media">La dirección <code>${esc(location.hash)}</code> no existe.</div>
-        <p><a class="boton" href="#/resumen">Ir al inicio</a></p>`;
+      vista.innerHTML = `<h1>No encontramos esa página</h1>
+        <p class="suave">La dirección <code>${esc(location.hash)}</code> no existe o cambió de lugar.</p>
+        <p><a class="boton primario" href="#/resumen">Ir a Hoy</a></p>`;
     }
   } catch (e) {
     if (e.auth) { pantallaAcceso(); return; }
     vista.innerHTML = `<div class="alerta alta">${esc(e.message)}</div>`;
   }
+  scrollTo({ top: 0 });
   vista.focus({ preventScroll: true });
 }
 
@@ -219,30 +306,33 @@ async function etiquetasDe(recurso, forzar = false) {
   return cacheEtiquetas[recurso];
 }
 
-// ---------- Resumen ----------
+// ---------- Piezas de interfaz ----------
 
-// Los conteos se agrupan por área del menú: cuatro líneas en vez de una lista
-// con una entrada por tabla. Dentro de cada línea solo se nombra lo que ya
-// tiene registros, para que se vea de un golpe qué falta empezar.
-const REGISTROS_POR_AREA = [
-  ['cafe', 'Café', 'registrar', ['lotes_cafe', 'procesos_cafe', 'ventas', 'gastos', 'presentaciones']],
-  ['cultivo', 'Cultivo', 'plan', ['plan_labores', 'actividades', 'observaciones', 'floraciones', 'cosechas', 'clima', 'suelo', 'vuelos']],
-  ['biomasa', 'Biomasa', 'tengo', ['subproductos', 'oportunidades']],
-  ['finca', 'Finca', 'lotes', ['productores']],
-];
-
-function registrosPorArea(registros) {
-  return REGISTROS_POR_AREA.map(([, nombre, inicio, tablas]) => {
-    const conDatos = tablas.filter((t) => (registros[t] ?? 0) > 0);
-    const total = tablas.reduce((n, t) => n + (registros[t] ?? 0), 0);
-    const detalle = conDatos
-      .map((t) => `<a href="#/${t}">${esc(esquema.recursos[t].etiqueta.toLowerCase())}</a> ${fmt(registros[t])}`)
-      .join(' · ');
-    return `<li><a href="#/${inicio}"><b>${esc(nombre)}</b></a>: ${total
-      ? `${fmt(total)} ${total === 1 ? 'registro' : 'registros'} <span class="suave pequeno">${detalle}</span>`
-      : '<span class="suave">aún nada</span>'}</li>`;
-  }).join('');
+// Lista agrupada de iOS: un título pequeño encima y filas con separador.
+// fila: { href | data, titulo, detalle, valor, punto } — todo opcional menos titulo.
+function lista(tituloGrupo, filas, pie = '') {
+  if (!filas.length) return '';
+  return `${tituloGrupo ? `<p class="lista-titulo">${esc(tituloGrupo)}</p>` : ''}
+    <div class="lista">${filas.map(filaLista).join('')}</div>
+    ${pie ? `<p class="lista-pie">${pie}</p>` : ''}`;
 }
+
+function filaLista(f) {
+  const etiqueta = f.href ? 'a' : f.data ? 'button' : 'div';
+  const atr = f.href ? `href="${f.href}"${f.descarga ? ' download' : ''}` : f.data ? `type="button" ${f.data}` : '';
+  const punto = f.punto ? `<span class="fila-punto ${f.punto}" aria-hidden="true"></span>` : '';
+  return `<${etiqueta} class="fila${f.href || f.data ? '' : ' fija'}" ${atr}>
+    ${punto}<span class="fila-txt"><b>${f.titulo}</b>${f.detalle ? `<span>${f.detalle}</span>` : ''}</span>
+    ${f.valor != null ? `<span class="fila-valor">${f.valor}</span>` : ''}
+    ${f.href || f.data ? '<span class="chevron" aria-hidden="true">›</span>' : ''}
+  </${etiqueta}>`;
+}
+
+const widget = (valor, etiqueta) => `<div class="widget"><b>${valor}</b><span>${esc(etiqueta)}</span></div>`;
+
+const fechaLarga = () => new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// ---------- Hoy ----------
 
 // Siguiente paso del proceso según el estado menos avanzado que tenga café.
 const SIGUIENTE_PASO = {
@@ -252,119 +342,134 @@ const SIGUIENTE_PASO = {
   verde: 'tostar',
 };
 
-// Inicio: el café que se compró y en qué va. El cultivo propio tiene su propio
-// resumen en su área, para que las dos cosas no se mezclen.
+// El camino del café que se compra: de pergamino a molido. Se ve de un golpe
+// en qué etapa está cada kilo.
+const CAMINO = [['pergamino_seco', 'Pergamino'], ['verde', 'Verde'], ['tostado_grano', 'Tostado'], ['tostado_molido', 'Molido']];
+
+function caminoDelCafe(inv) {
+  const kgDe = (id) => inv.estados.find((e) => e.estado === id)?.kg ?? 0;
+  const antes = inv.estados.filter((e) => ['cereza', 'pergamino_humedo'].includes(e.estado) && e.kg > 0.01)
+    .map((e) => [e.estado, e.estado === 'cereza' ? 'Cereza' : 'Húmedo']);
+  const pasos = [...antes, ...CAMINO];
+  return `<div class="camino" role="list">${pasos.map(([id, nombre], i) => {
+    const kg = kgDe(id);
+    return `${i ? '<span class="camino-flecha" aria-hidden="true">›</span>' : ''}
+      <div class="camino-paso ${kg > 0.01 ? 'lleno' : ''}" role="listitem">
+        <b>${kg > 0.01 ? fmt(kg, kg < 10 ? 1 : 0) : '0'}</b><span>kg</span><em>${esc(nombre)}</em>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+// Inicio: el café que se compró y en qué va. El cultivo propio tiene su
+// portada en Campo, para que las dos cosas no se mezclen.
 async function vistaResumen() {
   const r = await api('/resumen');
   refrescarIndicadores(r);
   const inv = r.negocio.inventario;
   const neg = r.negocio.anio;
   const alertasCafe = r.alertas.filter((a) => a.grupo === 'cafe');
-  const altasFuera = r.alertas.filter((a) => a.grupo !== 'cafe' && a.nivel === 'alta').length;
+  const altasCampo = r.alertas.filter((a) => a.grupo !== 'cafe' && a.nivel === 'alta').length;
   const tostado = inv.estados.find((e) => e.estado.startsWith('tostado'));
   const porProcesar = inv.estados.find((e) => SIGUIENTE_PASO[e.estado] && e.kg > 0.01);
+  const verbo = porProcesar ? SIGUIENTE_PASO[porProcesar.estado] : '';
+  const nivel = { alta: 'rojo', media: 'ambar', info: 'azul' };
+  const totalRegistros = Object.values(r.registros).reduce((s, n) => s + n, 0);
 
   vista.innerHTML = `
-    <h1>Nández Café <span class="suave pequeno">${usuario ? `${esc(usuario)} · ` : ''}${esc(r.hoy)}</span></h1>
-    <div class="acciones">
-      <a class="accion" href="#/registrar"><b>Registrar proceso</b><span>Trilla, tueste, molienda</span></a>
-      <button type="button" class="accion" data-nuevo="ventas"><b>Anotar una venta</b><span>Bolsas o kg que salieron</span></button>
-      <button type="button" class="accion" data-nuevo="gastos"><b>Anotar un gasto</b><span>Empaque, transporte, servicios</span></button>
-      <button type="button" class="accion" data-nuevo="lotes_cafe"><b>Nuevo lote de café</b><span>Un café que entra</span></button>
-    </div>
+    <header class="titulo-grande">
+      <p class="sobre">${esc(fechaLarga())}</p>
+      <h1>${usuario ? `Hola, ${esc(usuario.split(' ')[0])}` : 'Hoy'}</h1>
+    </header>
 
-    <div class="cifras">
-      <div class="cifra"><b>${fmt(inv.total_kg, 1)}</b><span>kg de café en inventario</span></div>
-      <div class="cifra"><b>${tostado ? '$' + fmt(tostado.cop_por_kg) : '—'}</b><span>costo del kg tostado</span></div>
-      <div class="cifra"><b>$${fmt(inv.total_valor_cop)}</b><span>inventario al costo</span></div>
-      <div class="cifra"><b>$${fmt(neg.utilidad_operativa_cop)}</b><span>utilidad ${r.cosecha_anio.anio}</span></div>
-    </div>
-
-    ${porProcesar
-    ? `<div class="alerta"><b>Siguiente paso:</b> hay <b>${fmt(porProcesar.kg, 2)} kg</b> de ${esc(porProcesar.nombre.toLowerCase())} esperando ${esc(SIGUIENTE_PASO[porProcesar.estado])}.
-         <a href="#/registrar">Registrar ahora</a>.</div>`
+    <section class="tarjeta camino-tarjeta">
+      <div class="tarjeta-cab"><h2>El camino del café</h2><a href="#/inventario">Inventario</a></div>
+      ${caminoDelCafe(inv)}
+      ${porProcesar
+    ? `<a class="boton primario ancho-total" href="#/registrar">${esc(verbo[0].toUpperCase() + verbo.slice(1))} ${fmt(porProcesar.kg, 1)} kg de ${esc(porProcesar.nombre.split(' ')[0].toLowerCase())}</a>`
     : inv.total_kg > 0
-      ? '<div class="alerta">Todo el café está procesado. Lo que sigue es venderlo: revise <a href="#/precios">Precios</a>.</div>'
-      : '<div class="alerta media">No hay café en inventario. Empiece con <b>Nuevo lote de café</b> y anote los kg y el precio que pagó.</div>'}
+      ? '<a class="boton primario ancho-total" href="#/precios">Todo procesado: ver precios para vender</a>'
+      : '<button type="button" class="boton primario ancho-total" data-nuevo="lotes_cafe">Registrar la primera compra</button>'}
+    </section>
 
-    <div class="rejilla">
-      <section class="tarjeta">
-        <h2>Pendientes del café</h2>
-        ${alertasCafe.length
-    ? alertasCafe.map((a) => `<div class="alerta ${a.nivel}">${esc(a.mensaje)}</div>`).join('')
-    : '<p class="suave">Nada por revisar en el café.</p>'}
-      </section>
-      <section class="tarjeta">
-        <h2>Cómo va el negocio</h2>
-        <ul class="limpia">
-          <li>Inventario: <b>${fmt(inv.total_kg, 1)} kg</b> por <b>$${fmt(inv.total_valor_cop)}</b> al costo${inv.estados.length ? ` <span class="suave pequeno">(${inv.estados.map((e) => `${fmt(e.kg, 1)} kg ${esc(e.nombre.toLowerCase())}`).join(', ')})</span>` : ''}</li>
-          <li>Ingresos ${r.cosecha_anio.anio}: <b>$${fmt(neg.ingresos_cop)}</b> · margen bruto <b>$${fmt(neg.margen_bruto_cop)}</b>${neg.margen_bruto_pct != null ? ` (${fmt(neg.margen_bruto_pct, 1)} %)` : ''}</li>
-          <li>Gastos: <b>$${fmt(neg.gastos_operativos_cop)}</b> · utilidad <b>$${fmt(neg.utilidad_operativa_cop)}</b></li>
-          <li>Comprado: <b>${fmt(neg.compras.kg, 1)} kg</b> por <b>$${fmt(neg.compras.valor_cop)}</b></li>
-          ${neg.por_cobrar.valor_cop ? `<li>Por cobrar: <b>$${fmt(neg.por_cobrar.valor_cop)}</b> en ${neg.por_cobrar.ventas} venta(s)</li>` : ''}
-        </ul>
-        <p class="pequeno"><a href="#/inventario">Inventario</a> · <a href="#/costos">Costos</a> · <a href="#/precios">Precios</a> · <a href="#/pyg">Resultados</a></p>
-      </section>
-      <section class="tarjeta">
-        <h2>Qué hay registrado</h2>
-        <p class="suave pequeno">Cada registro mejora los costos y la predicción.</p>
-        <ul class="limpia">${registrosPorArea(r.registros)}</ul>
-        <p class="pequeno" style="margin-top:10px">
-          <a href="/api/respaldo${token() ? `?token=${encodeURIComponent(token())}` : ''}" download>⬇ Descargar respaldo</a>
-          <span class="suave">— un archivo con todo lo registrado. Guárdelo cada tanto: si el servidor se daña, es lo único que lo recupera.</span>
-        </p>
-      </section>
+    <div class="widgets">
+      ${widget(`${fmt(inv.total_kg, 1)} kg`, 'en inventario')}
+      ${widget(tostado ? `$${fmt(tostado.cop_por_kg)}` : '—', 'cuesta el kg tostado')}
+      ${widget(`$${fmt(inv.total_valor_cop)}`, 'inventario al costo')}
+      ${widget(`<span class="${neg.utilidad_operativa_cop < 0 ? 'negativo' : ''}">$${fmt(neg.utilidad_operativa_cop)}</span>`, `utilidad ${r.cosecha_anio.anio}`)}
     </div>
 
-    <section class="tarjeta" style="margin-top:12px">
-      <h2>La finca, aparte</h2>
-      <p class="suave pequeno">El cultivo propio va por su lado para no mezclarse con el café que se compra.</p>
-      <p>${fmt(r.totales.plantas)} plantas en ${r.totales.lotes} lotes${r.clima_7_dias ? ` · ${fmt(r.clima_7_dias.lluvia_mm, 1)} mm de lluvia en 7 días` : ''}${altasFuera ? ` · <b>${altasFuera} alerta(s) alta(s)</b>` : ''}
-        — <a href="#/cultivo">ver Cultivo</a></p>
-    </section>`;
+    ${lista('Pendientes del café', alertasCafe.map((a) => ({ titulo: esc(a.mensaje), punto: nivel[a.nivel] ?? 'azul' })))}
+    ${alertasCafe.length ? '' : lista('Pendientes del café', [{ titulo: 'Nada por revisar', detalle: 'El café está al día.', punto: 'verde' }])}
+
+    ${lista(`Negocio ${r.cosecha_anio.anio}`, [
+    { titulo: 'Ingresos', valor: `$${fmt(neg.ingresos_cop)}`, href: '#/ventas' },
+    { titulo: 'Margen bruto', valor: `$${fmt(neg.margen_bruto_cop)}${neg.margen_bruto_pct != null ? ` · ${fmt(neg.margen_bruto_pct, 0)} %` : ''}`, href: '#/pyg' },
+    { titulo: 'Gastos', valor: `$${fmt(neg.gastos_operativos_cop)}`, href: '#/gastos' },
+    { titulo: 'Café comprado', valor: `${fmt(neg.compras.kg, 1)} kg · $${fmt(neg.compras.valor_cop)}`, href: '#/lotes_cafe' },
+    ...(neg.por_cobrar.valor_cop ? [{ titulo: 'Por cobrar', valor: `$${fmt(neg.por_cobrar.valor_cop)}`, detalle: `${neg.por_cobrar.ventas} venta(s)`, href: '#/ventas', punto: 'ambar' }] : []),
+  ])}
+
+    ${lista('Más', [
+    { titulo: 'Campo', detalle: `${fmt(r.totales.plantas)} plantas en ${r.totales.lotes} lotes${r.clima_7_dias ? ` · ${fmt(r.clima_7_dias.lluvia_mm, 0)} mm de lluvia esta semana` : ''}`, valor: altasCampo ? `${altasCampo} alerta${altasCampo === 1 ? '' : 's'}` : null, href: '#/campo', punto: altasCampo ? 'rojo' : null },
+    { titulo: 'Descargar respaldo', detalle: `Todo lo registrado (${fmt(totalRegistros)} registros) en un archivo`, href: `/api/respaldo${token() ? `?token=${encodeURIComponent(token())}` : ''}`, descarga: true },
+  ], 'Guarde un respaldo cada tanto: si algo se daña, es lo único que lo recupera.')}`;
 
   vista.querySelectorAll('[data-nuevo]').forEach((b) => {
     b.addEventListener('click', () => abrirFormulario(b.dataset.nuevo, null, vistaResumen));
   });
 }
 
-// Resumen del área Cultivo: la finca propia, su clima, sus alertas y sus lotes.
-async function vistaCultivo() {
+// ---------- Campo ----------
+
+// Portada de Campo: la finca, su clima y sus alertas arriba; abajo, todo lo
+// del cultivo, la biomasa y la finca en listas agrupadas, como Ajustes del iPhone.
+async function vistaCampo() {
   const r = await api('/resumen');
   refrescarIndicadores(r);
   const c7 = r.clima_7_dias;
-  const alertas = r.alertas.filter((a) => a.grupo !== 'cafe');
+  // Lo más grave primero; una tarea atrasada lleva al plan, el resto a la predicción.
+  const orden = { alta: 0, media: 1, info: 2 };
+  const alertas = r.alertas.filter((a) => a.grupo !== 'cafe').sort((a, b) => (orden[a.nivel] ?? 3) - (orden[b.nivel] ?? 3));
+  const nivel = { alta: 'rojo', media: 'ambar', info: 'azul' };
+  const filaAlerta = (a) => ({ titulo: esc(a.mensaje), punto: nivel[a.nivel] ?? 'azul', href: /programad/.test(a.mensaje) ? '#/plan' : '#/prediccion' });
 
   vista.innerHTML = `
-    <h1>Cultivo <span class="suave pequeno">${esc(r.finca.nombre)} · ${esc(r.finca.municipio ?? '')} · ${fmt(r.finca.hectareas, 1)} ha · ${esc(r.hoy)}</span></h1>
-    <div class="cifras">
-      <div class="cifra"><b>${fmt(r.totales.plantas)}</b><span>plantas en ${r.totales.lotes} lotes</span></div>
-      <div class="cifra"><b>${c7 ? fmt(c7.lluvia_mm, 1) : '—'}</b><span>mm de lluvia (7 días)</span></div>
-      <div class="cifra"><b>${c7 ? fmt(c7.temp_media, 1) + ' °C' : '—'}</b><span>temperatura media (7 días)</span></div>
-      <div class="cifra"><b>${fmt(r.cosecha_anio.kg_cereza)}</b><span>kg cereza ${r.cosecha_anio.anio}</span></div>
-      <div class="cifra"><b>${fmt(r.biomasa_disponible.reduce((s, b) => s + b.kg_frescos, 0))}</b><span>kg de subproductos</span></div>
-    </div>
-    <div class="rejilla">
-      <section class="tarjeta">
-        <h2>Alertas del cultivo</h2>
-        ${alertas.length ? alertas.map((a) => `<div class="alerta ${a.nivel}">${esc(a.mensaje)}</div>`).join('') : '<p class="suave">Sin alertas.</p>'}
-      </section>
-      <section class="tarjeta">
-        <h2>Datos pendientes</h2>
-        ${r.datos_pendientes.length ? `<ul class="limpia">${r.datos_pendientes.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '<p class="suave">Todo al día.</p>'}
-      </section>
-    </div>
-    <h2 style="margin-top:16px">Lotes de la finca</h2>
-    <div class="tabla-contenedor"><table>
-      <thead><tr><th>Lote</th><th>Variedad</th><th>Plantas</th><th>Edad (meses)</th><th>Estado</th><th>Última labor</th><th>Última floración</th><th>Obs. abiertas</th><th>kg cereza</th></tr></thead>
-      <tbody>${r.lotes.map((l) => `<tr data-id="${l.id}">
-        <td>${esc(l.nombre)}</td><td>${esc(l.variedad ?? '—')}</td><td class="num">${fmt(l.num_plantas)}</td>
-        <td class="num">${fmt(l.edad_meses)}</td><td>${esc(l.estado ?? '—')}</td><td>${esc(l.ultima_labor ?? '—')}</td>
-        <td>${esc(l.ultima_floracion ?? '—')}</td><td class="num">${l.observaciones_abiertas}</td><td class="num">${fmt(l.kg_cereza_total)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
+    <header class="titulo-grande">
+      <p class="sobre">${esc(r.finca.nombre)}${r.finca.municipio ? ` · ${esc(r.finca.municipio)}` : ''} · ${fmt(r.finca.hectareas, 1)} ha</p>
+      <h1>Campo</h1>
+    </header>
 
-  vista.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => abrirFormulario('lotes', Number(tr.dataset.id), vistaCultivo)));
+    <div class="widgets">
+      ${widget(fmt(r.totales.plantas), `plantas en ${r.totales.lotes} lotes`)}
+      ${widget(c7 ? `${fmt(c7.lluvia_mm, 0)} mm` : '—', 'lluvia en 7 días')}
+      ${widget(c7 ? `${fmt(c7.temp_media, 1)} °C` : '—', 'temperatura media')}
+      ${widget(`${fmt(r.cosecha_anio.kg_cereza)} kg`, `cereza ${r.cosecha_anio.anio}`)}
+    </div>
+
+    ${lista('Alertas', alertas.slice(0, 3).map(filaAlerta))}
+    ${alertas.length > 3 ? `<details class="pendientes"><summary>Ver ${alertas.length - 3} alerta${alertas.length - 3 === 1 ? '' : 's'} más</summary>
+      ${lista('', alertas.slice(3).map(filaAlerta))}</details>` : ''}
+
+    ${lista('Lotes', r.lotes.map((l) => ({
+    titulo: esc(l.nombre),
+    detalle: [l.variedad, l.num_plantas ? `${fmt(l.num_plantas)} plantas` : null, l.edad_meses ? `${fmt(l.edad_meses)} meses` : null, l.ultima_labor ? `última labor ${l.ultima_labor}` : null].filter(Boolean).map(esc).join(' · '),
+    valor: l.observaciones_abiertas ? `${l.observaciones_abiertas} obs.` : null,
+    data: `data-lote="${l.id}"`,
+  })))}
+
+    ${GRUPOS_CAMPO.map(([grupo, filas]) => lista(grupo, filas.map(([id, t, d]) => ({
+    titulo: esc(t),
+    detalle: d ? esc(d) : '',
+    valor: r.registros[id] ? fmt(r.registros[id]) : null,
+    href: `#/${id}`,
+  })))).join('')}
+
+    ${r.datos_pendientes.length ? `<details class="pendientes">
+      <summary>Datos que faltan (${r.datos_pendientes.length})</summary>
+      ${lista('', r.datos_pendientes.map((p) => ({ titulo: esc(p) })))}
+    </details>` : ''}`;
+
+  vista.querySelectorAll('[data-lote]').forEach((b) => b.addEventListener('click', () => abrirFormulario('lotes', Number(b.dataset.lote), vistaCampo)));
 }
 
 // ---------- CRUD genérico ----------
@@ -388,6 +493,28 @@ async function valorCelda(rec, campo, fila) {
   return esc(def.tipo === 'opcion' ? titulo(v) : v);
 }
 
+// Nombres que ve la gente, cuando el del modelo de datos suena a tabla.
+const NOMBRES = {
+  lotes_cafe: 'Compras', presentaciones: 'Productos', actividades: 'Labores hechas', plan_labores: 'Tareas',
+  subproductos: 'Partidas', fincas: 'Datos de la finca', suelo: 'Análisis de suelo',
+};
+const nombreDe = (recurso) => NOMBRES[recurso] ?? esquema.recursos[recurso].etiqueta;
+
+// Qué decir cuando una sección está vacía: qué es, por qué sirve y cómo empezar.
+// [título, explicación, botón, a dónde lleva el botón (si no, abre el formulario)]
+const VACIOS = {
+  procesos_cafe: ['Aún no hay procesos', 'Cada vez que trillen, tuesten o muelan, anótelo: el sistema calcula cuánto salió y cuánto cuesta cada kilo.', 'Registrar proceso', '#/registrar'],
+  lotes_cafe: ['Aún no hay compras', 'Cada compra de café es un lote: cuántos kg, a cuánto y a quién.', 'Registrar compra'],
+  ventas: ['Aún no hay ventas', 'Anote cada bolsa o kilo que salga para ver lo que entra y lo que falta por cobrar.', 'Anotar venta'],
+  gastos: ['Aún no hay gastos', 'Empaque, transporte, gas, servicios: todo suma al costo real del café.', 'Anotar gasto'],
+  presentaciones: ['Aún no hay productos', 'Las bolsas que venden: peso, empaque y precio. Con eso se calcula el margen de cada una.', 'Agregar producto'],
+  actividades: ['Aún no hay labores', 'Abonadas, fumigadas, plateos: lo que se hace en cada lote y cuánto costó.', 'Anotar labor'],
+  observaciones: ['Aún no hay observaciones', 'Plagas, enfermedades o cualquier cosa que se vea en un lote.', 'Anotar observación'],
+};
+
+// Lista o tabla: cada persona elige, y el celular la recuerda.
+const comoTabla = () => { try { return localStorage.getItem('cafe_vista') === 'tabla'; } catch { return false; } };
+
 async function vistaRecurso(recurso, filtros = {}) {
   const rec = esquema.recursos[recurso];
   const tieneLote = Boolean(rec.campos.lote_id);
@@ -396,46 +523,99 @@ async function vistaRecurso(recurso, filtros = {}) {
 
   const extra = { oportunidades: 'indice', subproductos: 'kg_secos_estimados', floraciones: 'cosecha_estimada' }[recurso];
   const cols = columnasDe(rec);
+  const tabla = comoTabla();
+  const buscando = Boolean(filtros.q || filtros.lote_id);
 
-  const filas = await Promise.all(datos.map(async (f) => {
-    const celdas = await Promise.all(cols.map(async (c) => {
-      const num = ['real', 'entero'].includes(rec.campos[c].tipo);
-      return `<td class="${num ? 'num' : ''}">${await valorCelda(rec, c, f)}</td>`;
+  let cuerpo;
+  if (!datos.length) {
+    const [t, d, boton, destino] = VACIOS[recurso] ?? [`Aún no hay ${nombreDe(recurso).toLowerCase()}`, 'Agregue el primero con el botón Nuevo.', 'Nuevo'];
+    cuerpo = buscando
+      ? '<div class="vacio"><b>Sin resultados</b><span>Pruebe con otra palabra o quite el filtro.</span></div>'
+      : `<div class="vacio"><b>${esc(t)}</b><span>${esc(d)}</span>
+          ${rec.soloLectura ? '' : destino ? `<a class="boton primario" href="${destino}">${esc(boton)}</a>` : `<button type="button" class="primario" data-vacio>${esc(boton)}</button>`}</div>`;
+  } else if (tabla) {
+    const filas = await Promise.all(datos.map(async (f) => {
+      const celdas = await Promise.all(cols.map(async (c) => {
+        const num = ['real', 'entero'].includes(rec.campos[c].tipo);
+        return `<td class="${num ? 'num' : ''}">${await valorCelda(rec, c, f)}</td>`;
+      }));
+      let celdaExtra = '';
+      if (extra === 'cosecha_estimada') celdaExtra = `<td>${esc(f.cosecha_estimada?.probable ?? '—')}</td>`;
+      else if (extra) celdaExtra = `<td class="num">${f[extra] == null ? '—' : fmt(f[extra], 1)}</td>`;
+      return `<tr data-id="${f.id}">${celdas.join('')}${celdaExtra}</tr>`;
     }));
-    let celdaExtra = '';
-    if (extra === 'cosecha_estimada') celdaExtra = `<td>${esc(f.cosecha_estimada?.probable ?? '—')}</td>`;
-    else if (extra) celdaExtra = `<td class="num">${f[extra] == null ? '—' : fmt(f[extra], 1)}</td>`;
-    return `<tr data-id="${f.id}">${celdas.join('')}${celdaExtra}</tr>`;
-  }));
-
-  const etiquetaExtra = { indice: 'Índice (0–100)', kg_secos_estimados: 'kg secos (est.)', cosecha_estimada: 'Cosecha probable' }[extra];
+    const etiquetaExtra = { indice: 'Índice (0–100)', kg_secos_estimados: 'kg secos (est.)', cosecha_estimada: 'Cosecha probable' }[extra];
+    cuerpo = `<div class="tabla-contenedor"><table>
+      <thead><tr>${cols.map((c) => `<th>${esc(titulo(c))}</th>`).join('')}${etiquetaExtra ? `<th>${etiquetaExtra}</th>` : ''}</tr></thead>
+      <tbody>${filas.join('')}</tbody></table></div>`;
+  } else {
+    // Fila de lista: el nombre arriba, la fecha y lo demás en gris debajo, y
+    // a la derecha la primera cifra (el total de la venta, los kg, el monto).
+    const principal = rec.campoEtiqueta && rec.campos[rec.campoEtiqueta] ? rec.campoEtiqueta : cols.find((c) => c !== rec.campoFecha) ?? cols[0];
+    // A la derecha va la plata si la hay (total de la venta, valor del gasto,
+    // precio del producto); si no, los kilos.
+    const numericas = cols.filter((c) => c !== principal && ['real', 'entero'].includes(rec.campos[c].tipo));
+    const cifra = ['total_cop', 'valor_cop', 'precio_venta_cop'].find((c) => numericas.includes(c)) ?? numericas[0];
+    const proceso = cols.includes('kg_entrada') && cols.includes('kg_salida');
+    const resto = cols.filter((c) => ![principal, cifra, rec.campoFecha, ...(proceso ? ['kg_entrada', 'kg_salida'] : [])].includes(c));
+    const filas = await Promise.all(datos.map(async (f) => {
+      const plata = (c) => /cop|precio|valor|monto|costo/.test(c) && ['real', 'entero'].includes(rec.campos[c].tipo);
+      const detalle = (await Promise.all(resto.map(async (c) => (f[c] == null ? null
+        : c === 'activa' ? (f[c] === 'no' ? 'Inactivo' : null)
+          : plata(c) ? `$${fmt(f[c])}${/kg/.test(c) ? '/kg' : ''}`
+            : c === 'gramos' ? `${fmt(f[c])} g`
+              : c === 'unidades' ? `${fmt(f[c])} ${f[c] === 1 ? 'unidad' : 'unidades'}` : valorCelda(rec, c, f))))).filter(Boolean).slice(0, 3);
+      const fecha = rec.campoFecha && f[rec.campoFecha] ? esc(String(f[rec.campoFecha]).slice(0, 10)) : null;
+      const valorExtra = extra === 'cosecha_estimada' ? f.cosecha_estimada?.probable : extra && f[extra] != null ? fmt(f[extra], 1) : null;
+      return filaLista({
+        titulo: await valorCelda(rec, principal, f),
+        detalle: [fecha, ...detalle].filter(Boolean).join(' · '),
+        valor: proceso && f.kg_entrada != null
+          ? `${fmt(f.kg_entrada, 1)} → ${f.kg_salida == null ? '…' : fmt(f.kg_salida, 1)} kg`
+          : cifra && f[cifra] != null
+          ? `${/cop|precio|valor|monto|costo/.test(cifra) ? '$' : ''}${fmt(f[cifra], /cop|precio|valor|monto|costo/.test(cifra) ? 0 : 2)}${/kg/.test(cifra) ? ' kg' : ''}`
+          : valorExtra != null ? esc(valorExtra) : null,
+        data: `data-id="${f.id}"`,
+      });
+    }));
+    cuerpo = `<div class="lista">${filas.join('')}</div>`;
+  }
 
   vista.innerHTML = `
-    <h1>${esc(rec.etiqueta)} <span class="suave pequeno">${fmt(total)} registros</span></h1>
-    <div class="herramientas">
-      ${rec.soloLectura ? '' : '<button class="primario" id="nuevo">+ Nuevo</button>'}
-      ${tieneLote ? `<select id="f-lote" style="width:auto"><option value="">Todos los lotes</option>${[...lotes].map(([id, n]) => `<option value="${id}" ${String(filtros.lote_id) === String(id) ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}
-      <input id="f-q" class="crece" type="search" placeholder="Buscar texto…" value="${esc(filtros.q ?? '')}">
-      ${recurso === 'clima' ? '<button id="sync">Sincronizar Open-Meteo (7 días)</button>' : ''}
-      <button id="exportar">Exportar CSV</button>
-    </div>
+    <header class="titulo-grande con-accion">
+      <div><p class="sobre">${fmt(total)} ${total === 1 ? 'registro' : 'registros'}</p><h1>${esc(nombreDe(recurso))}</h1></div>
+      ${rec.soloLectura ? '' : '<button type="button" class="boton-redondo" id="nuevo" aria-label="Nuevo registro">+</button>'}
+    </header>
+    ${datos.length || buscando ? `<div class="herramientas">
+      <input id="f-q" class="buscar crece" type="search" placeholder="Buscar" value="${esc(filtros.q ?? '')}">
+      ${tieneLote ? `<select id="f-lote" class="buscar"><option value="">Todos los lotes</option>${[...lotes].map(([id, n]) => `<option value="${id}" ${String(filtros.lote_id) === String(id) ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}
+    </div>` : ''}
     ${recurso === 'clima' ? '<p class="suave pequeno">Open-Meteo es un modelo meteorológico de referencia, no una medición en la finca. Los datos de estación o sensor propios tienen prioridad en el resumen.</p>' : ''}
     ${recurso === 'oportunidades' ? '<p class="suave pequeno">Califique cada criterio de 1 a 5, donde 5 es siempre lo más favorable. Vea el <a href="#/ranking">ranking</a>.</p>' : ''}
-    <div class="tabla-contenedor">
-      ${datos.length ? `<table>
-        <thead><tr>${cols.map((c) => `<th>${esc(titulo(c))}</th>`).join('')}${etiquetaExtra ? `<th>${etiquetaExtra}</th>` : ''}</tr></thead>
-        <tbody>${filas.join('')}</tbody>
-      </table>` : '<div class="vacio">Aún no hay registros.</div>'}
-    </div>`;
+    ${cuerpo}
+    ${datos.length ? `<div class="pie-lista">
+      <div class="segmentado-ios mini" role="group" aria-label="Cómo mostrar">
+        <button type="button" data-modo="lista" ${tabla ? '' : 'aria-pressed="true"'}>Lista</button>
+        <button type="button" data-modo="tabla" ${tabla ? 'aria-pressed="true"' : ''}>Tabla</button>
+      </div>
+      ${recurso === 'clima' ? '<button type="button" class="enlace" id="sync">Sincronizar clima (7 días)</button>' : ''}
+      <button type="button" class="enlace" id="exportar">Exportar CSV</button>
+    </div>` : ''}`;
 
-  const recargar = () => vistaRecurso(recurso, { lote_id: $('#f-lote')?.value, q: $('#f-q').value });
-  $('#nuevo')?.addEventListener('click', () => abrirFormulario(recurso, null, recargar, { lote_id: filtros.lote_id }));
+  const recargar = () => vistaRecurso(recurso, { lote_id: $('#f-lote')?.value, q: $('#f-q')?.value });
+  const nuevo = () => abrirFormulario(recurso, null, recargar, { lote_id: filtros.lote_id });
+  $('#nuevo')?.addEventListener('click', nuevo);
+  vista.querySelector('[data-vacio]')?.addEventListener('click', nuevo);
   $('#f-lote')?.addEventListener('change', recargar);
   let t;
-  $('#f-q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(recargar, 350); });
-  vista.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => abrirFormulario(recurso, Number(tr.dataset.id), recargar)));
+  $('#f-q')?.addEventListener('input', () => { clearTimeout(t); t = setTimeout(recargar, 350); });
+  vista.querySelectorAll('[data-id]').forEach((el) => el.addEventListener('click', () => abrirFormulario(recurso, Number(el.dataset.id), recargar)));
+  vista.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('click', () => {
+    try { localStorage.setItem('cafe_vista', b.dataset.modo); } catch { /* sin almacenamiento */ }
+    recargar();
+  }));
 
-  $('#exportar').addEventListener('click', async () => {
+  $('#exportar')?.addEventListener('click', async () => {
     const blob = await api(`/exportar/${recurso}.csv?${new URLSearchParams(Object.fromEntries(Object.entries(filtros).filter(([, v]) => v)))}`);
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${recurso}-${hoy()}.csv` });
     a.click();
@@ -536,13 +716,14 @@ async function abrirFormulario(recurso, id, alGuardar, valoresIniciales = {}) {
   }
 
   formDialogo.innerHTML = `
-    <div class="dialogo-cab"><h2 style="margin:0">${id ? 'Editar' : 'Nuevo'} · ${esc(rec.etiqueta)}</h2><button type="button" data-cerrar aria-label="Cerrar">✕</button></div>
+    <div class="dialogo-cab">
+      <button type="button" class="enlace" data-cerrar>${soloLectura ? 'Cerrar' : 'Cancelar'}</button>
+      <h2>${id ? '' : 'Nuevo: '}${esc(nombreDe(recurso))}</h2>
+      ${soloLectura ? '<span></span>' : '<button type="submit" class="enlace fuerte" value="guardar" id="guardar">Guardar</button>'}
+    </div>
     <div class="dialogo-cuerpo"><div class="campos">${extraHtml}${controles.join('')}${adjuntosHtml}</div>
-      <div class="error-campo" data-error="_general"></div></div>
-    <div class="dialogo-pie">
-      ${id && !soloLectura ? '<button type="button" class="peligro izq" id="borrar">Borrar</button>' : ''}
-      <button type="button" data-cerrar>Cancelar</button>
-      ${soloLectura ? '' : '<button type="submit" class="primario" value="guardar" id="guardar">Guardar</button>'}
+      <div class="error-campo" data-error="_general"></div>
+      ${id && !soloLectura ? '<button type="button" class="peligro ancho-total" id="borrar" style="margin-top:20px">Borrar este registro</button>' : ''}
     </div>`;
 
   if (soloLectura) formDialogo.querySelectorAll('input,select,textarea').forEach((el) => { el.disabled = true; });
@@ -555,7 +736,7 @@ async function abrirFormulario(recurso, id, alGuardar, valoresIniciales = {}) {
       await api(`/${recurso}/${id}`, { metodo: 'DELETE' });
       delete cacheEtiquetas[recurso];
       dialogo.close();
-      avisar('Registro borrado.');
+      avisar('Registro borrado');
       alGuardar?.();
     } catch (e) {
       $('[data-error="_general"]', formDialogo).textContent = e.message;
@@ -590,7 +771,7 @@ async function abrirFormulario(recurso, id, alGuardar, valoresIniciales = {}) {
       }
       delete cacheEtiquetas[recurso];
       dialogo.close();
-      avisar(id ? 'Guardado.' : 'Guardado. Abra el registro para agregar fotos.');
+      avisar(id ? '✓ Cambios guardados' : (usuario ? `✓ Guardado a nombre de ${usuario.split(' ')[0]}` : '✓ Guardado'));
       alGuardar?.();
     } catch (e) {
       $('[data-error="_general"]', formDialogo).textContent = e.message;

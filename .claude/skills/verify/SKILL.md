@@ -45,16 +45,35 @@ PORT=3101 API_TOKEN=clave-de-prueba-123 CLIMA_AUTO_HORAS=0 node src/server.js
 sobrescribe las variables del shell con las del `.env`. Llamar a `node
 src/server.js` directo.
 
+### Instancia de verificación desde el panel del navegador
+
+`.claude/launch.json` tiene también `cafe-prueba`: corre `node --env-file=.env.prueba
+src/server.js` en el puerto 3100, sin clave, sin clima automático y sobre
+`data/prueba.db`. Antes de usarla, sacar una copia fresca de la base:
+
+```bash
+node -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync('data/cafe.db');d.prepare('VACUUM INTO ?').run('data/prueba.db')"
+```
+
+(borrar `data/prueba.db` antes: `VACUUM INTO` no sobrescribe). El `.env` real ya
+apunta a Supabase; `cafe-servidor` (npm start) trabaja sobre los datos en línea.
+
+**Celular:** `resize_window` con 390x844 y recargar; el corte es 760 px (abajo
+barra de pestañas, arriba barra con pestañas). Con la ventana de Claude
+escondida las animaciones no avanzan: una hoja (`dialog`) puede medir `y` igual
+al alto de la pantalla por la animación detenida en su primer cuadro. No es un
+error del código.
+
 ## Conducir
 
 El panel es una sola página con rutas por hash. Se puede llegar directo a
-cualquier sección: `#/resumen` (inicio, café comprado), `#/cultivo` (resumen de
-la finca), `#/registrar`, `#/costos`, `#/precios`, `#/pyg`, `#/inventario`,
+cualquier sección: `#/resumen` (inicio, café comprado), `#/campo` (portada de
+la finca: cultivo, biomasa y finca; `#/cultivo` redirige ahí), `#/registrar`, `#/costos`, `#/precios`, `#/pyg`, `#/inventario`,
 `#/tengo`, `#/plan`, `#/prediccion`, `#/mapa`, y una por cada recurso
 (`#/ventas`, `#/gastos`, `#/lotes_cafe`, …).
 
 **El inicio y el cultivo están separados a propósito:** `#/resumen` solo muestra
-alertas con `grupo: "cafe"` y `#/cultivo` las de `grupo: "cultivo"`. Al cambiar
+alertas con `grupo: "cafe"` y `#/campo` las de `grupo: "cultivo"`. Al cambiar
 algo de alertas, revisar que ninguna quede sin grupo y por tanto invisible.
 
 Lo más rápido es manejarlo con JavaScript en la página en vez de clics:

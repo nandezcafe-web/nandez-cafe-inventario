@@ -4,9 +4,20 @@
     {
       "name": "cafe-servidor",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
+      "runtimeArgs": [
+        "start"
+      ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "cafe-prueba",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--env-file=.env.prueba",
+        "src/server.js"
+      ],
+      "port": 3100
     }
   ]
 }
