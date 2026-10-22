@@ -74,16 +74,18 @@ En la misma pestaña **Environment** hay una variable `USUARIOS`, vacía. Ahí v
 una clave por persona, para que cada registro quede con nombre:
 
 ```
-Maick:CLAVE_SUYA,Hermano:CLAVE_DE_EL
+Maick:CLAVE1,Edwin Hernandez:CLAVE2,Camila Hernandez:CLAVE3
 ```
 
-Sin espacios alrededor de la coma, y cambie `Hermano` por el nombre real: ese es
-el nombre que va a quedar en los registros. Las claves las puede sacar del
-archivo `.env` de su computador, donde ya hay dos generadas, o inventar otras
-largas. Guarde y Render reinicia el servicio solo.
+Sin espacios alrededor de las comas; los nombres sí pueden llevar espacios. Las
+tres claves ya están generadas en el archivo `.env` de su computador: cópielas
+de ahí. El nombre es el que queda escrito en cada registro, así que si alguna
+vez cambia un nombre, los registros viejos se quedan con el anterior.
+
+Guarde y Render reinicia el servicio solo.
 
 Cada uno entra con **su** clave, no con la compartida. Cuando confirme que los
-dos entran bien, **borre `API_TOKEN`** del panel: así ningún registro queda sin
+tres entran bien, **borre `API_TOKEN`** del panel: así ningún registro queda sin
 nombre.
 
 ## 4. Entrar desde los celulares
