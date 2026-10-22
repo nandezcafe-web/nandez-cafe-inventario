@@ -3,8 +3,7 @@ import { config } from './config.js';
 import { abrirDb } from './db/index.js';
 import { sembrarSiVacia } from './db/semilla.js';
 import { crearApp } from './app.js';
-import { sincronizarOpenMeteo } from './routes/clima.js';
-import { calcularPrediccion } from './lib/prediccion.js';
+import { monitorear } from './lib/monitoreo.js';
 
 const db = await abrirDb(config.databaseUrl ?? config.dbPath);
 if (await sembrarSiVacia(db)) console.log('Base de datos nueva: se cargaron la finca, los lotes y las oportunidades iniciales.');
@@ -20,25 +19,13 @@ const servidor = app.listen(config.port, config.host, () => {
   console.log(`Base de datos: ${config.databaseUrl ? `Postgres en ${new URL(config.databaseUrl).hostname}` : config.dbPath}`);
 });
 
-// Monitoreo automático de clima y riesgos para cada finca con coordenadas.
-async function monitorear() {
-  const fincas = await db.todos('SELECT id, nombre FROM fincas WHERE latitud IS NOT NULL AND longitud IS NOT NULL');
-  for (const f of fincas) {
-    try {
-      const s = await sincronizarOpenMeteo(db, { fincaId: f.id, dias: 2, timezone: config.timezone, modelos: config.climaModelos });
-      const p = await calcularPrediccion(db, f.id, { timezone: config.timezone, modelos: config.climaModelos });
-      const altos = p.riesgos.filter((r) => r.nivel === 'alto').map((r) => r.nombre);
-      console.log(`[monitoreo] ${f.nombre}: ${s.horas_guardadas} h de clima; riesgos altos: ${altos.join(', ') || 'ninguno'}`);
-    } catch (e) {
-      console.warn(`[monitoreo] ${f.nombre}: ${e.message}`);
-    }
-  }
-}
-
+// Monitoreo automático de clima y riesgos (ver lib/monitoreo.js). En línea no
+// corre esto: lo hace la tarea diaria de Vercel.
+const monitorearAhora = () => monitorear(db, config);
 let temporizador = null;
 if (config.climaAutoHoras > 0) {
-  setTimeout(monitorear, 5_000);
-  temporizador = setInterval(monitorear, config.climaAutoHoras * 3_600_000);
+  setTimeout(monitorearAhora, 5_000);
+  temporizador = setInterval(monitorearAhora, config.climaAutoHoras * 3_600_000);
 }
 
 function cerrar() {

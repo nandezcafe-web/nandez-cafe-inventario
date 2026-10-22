@@ -4,3 +4,4 @@ demo/
 .env
 *.log
 ACCESO-LOCAL.md
+public/vendor/

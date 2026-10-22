@@ -28,6 +28,20 @@ export const config = {
   // Con DATABASE_URL (Supabase) la base vive en Postgres; sin ella, en el
   // archivo SQLite de dbPath. Ver src/db/index.js.
   databaseUrl: process.env.DATABASE_URL || null,
+  // En Vercel no hay disco propio ni un proceso que siga vivo entre peticiones:
+  // cambia dónde van las fotos y cómo se sincroniza el clima.
+  enLinea: Boolean(process.env.VERCEL),
+  // Supabase Storage para fotos y documentos en línea. Opcional: sin esto, en
+  // línea las subidas se rechazan con un aviso en vez de perderse.
+  storage: process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? {
+      url: process.env.SUPABASE_URL,
+      clave: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      bucket: process.env.SUPABASE_BUCKET || 'adjuntos',
+    }
+    : null,
+  // Vercel la manda en Authorization al llamar las tareas programadas.
+  cronSecret: process.env.CRON_SECRET || null,
   uploadsDir: path.resolve(raiz, process.env.UPLOADS_DIR ?? 'data/uploads'),
   apiToken: process.env.API_TOKEN || null,
   // USUARIOS=Maick:clave1,Jhon:clave2 — una clave por persona, para saber quién

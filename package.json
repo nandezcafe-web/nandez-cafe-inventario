@@ -5,14 +5,15 @@
   "type": "module",
   "main": "src/server.js",
   "engines": {
-    "node": ">=22.13"
+    "node": "24.x"
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
     "demo": "node --env-file-if-exists=.env scripts/generar-demo.js",
-    "test:postgres": "node --test --test-concurrency=1 \"test/**/*.test.js\""
+    "test:postgres": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "build": "node scripts/copiar-vendor.js"
   },
   "dependencies": {
     "express": "^5.2.1",

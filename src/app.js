@@ -15,6 +15,9 @@ import { routerPlan } from './routes/plan.js';
 import { routerMapa } from './routes/mapa.js';
 import { routerContabilidad } from './routes/contabilidad.js';
 import { routerRespaldo } from './routes/respaldo.js';
+import { crearAlmacen } from './lib/almacen.js';
+import { monitorear } from './lib/monitoreo.js';
+import { noEncontrado } from './lib/errores.js';
 
 function tokenValido(recibido, esperado) {
   const a = Buffer.from(recibido ?? '');
@@ -45,6 +48,15 @@ export function crearApp(db, config) {
   app.use(express.json({ limit: '2mb' }));
 
   app.get('/api/salud', (_req, res) => res.json({ ok: true, version: '0.1.0' }));
+
+  // Tarea diaria de Vercel: clima y riesgos. Va antes de la clave de acceso
+  // porque Vercel no la tiene; trae la suya, CRON_SECRET, y nadie más puede
+  // dispararla. Sin CRON_SECRET configurado queda cerrada.
+  app.get('/api/cron/clima', async (req, res) => {
+    const recibido = req.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (!config.cronSecret || !tokenValido(recibido, config.cronSecret)) throw new ErrorHttp(401, 'No autorizado');
+    res.json({ ok: true, fincas: await monitorear(db, config) });
+  });
 
   const pideClave = Boolean(config.apiToken) || (config.usuarios ?? []).length > 0;
   if (pideClave) {
@@ -80,7 +92,8 @@ export function crearApp(db, config) {
   app.use('/api/plan', routerPlan(db, config));
   app.use('/api/mapa', routerMapa(db, config));
   app.use('/api/clima', routerClima(db, config)); // antes del CRUD: /sincronizar y /diario
-  app.use('/api/adjuntos', routerAdjuntos(db, config));
+  const almacen = crearAlmacen(config);
+  app.use('/api/adjuntos', routerAdjuntos(db, config, almacen));
   app.use('/api/exportar', routerExportar(db));
   app.use('/api/respaldo', routerRespaldo(db));
   app.use('/api', routerContabilidad(db));
@@ -90,7 +103,11 @@ export function crearApp(db, config) {
     app.use(`/api/${tabla}`, crearRouterCrud(db, tabla, rec));
   }
 
-  app.use('/uploads', express.static(config.uploadsDir, { fallthrough: false }));
+  app.get('/uploads/:archivo', async (req, res) => {
+    const datos = await almacen.leer(req.params.archivo);
+    if (!datos) throw noEncontrado('Archivo');
+    res.type(path.extname(req.params.archivo) || 'application/octet-stream').send(datos);
+  });
   app.use('/vendor/leaflet', express.static(path.join(import.meta.dirname, '..', 'node_modules', 'leaflet', 'dist')));
   app.use(express.static(config.publicDir));
 
@@ -101,7 +118,12 @@ export function crearApp(db, config) {
     if (err instanceof multer.MulterError) err = new ErrorHttp(400, `Archivo inválido: ${err.message}`);
     if (err.type === 'entity.parse.failed') err = new ErrorHttp(400, 'JSON mal formado');
     const status = err.status ?? err.statusCode ?? 500;
-    if (status >= 500) console.error(err);
+    // Lo previsto (Storage sin configurar, Open-Meteo caído) va en una línea;
+    // lo imprevisto, con la pila completa para poder encontrarlo.
+    if (status >= 500) {
+      if (err instanceof ErrorHttp) console.warn(`[${status}] ${err.message}`);
+      else console.error(err);
+    }
     res.status(status).json({
       error: status >= 500 && !(err instanceof ErrorHttp) ? 'Error interno del servidor' : err.message,
       ...(err.detalles ? { detalles: err.detalles } : {}),
