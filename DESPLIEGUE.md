@@ -1,0 +1,115 @@
+# Poner Nández Café en línea (Render)
+
+Objetivo: que usted y su hermano puedan registrar y consultar desde el celular,
+desde cualquier parte, sin depender de que el computador de la casa esté
+prendido.
+
+Costo: **US$7/mes** del servicio + **US$0,25/mes** del disco de 1 GB ≈ **29.000
+pesos al mes**.
+
+La configuración ya está lista en [render.yaml](render.yaml). Lo que sigue es lo
+que le toca a usted en el navegador.
+
+---
+
+## 1. Subir el proyecto a GitHub
+
+El repositorio local ya está hecho, con el primer commit. Falta crear el
+repositorio remoto y empujarlo.
+
+1. Entre a <https://github.com/new>.
+2. Nombre: `nandez-cafe`. **Privado** (es su contabilidad).
+3. **No** marque "Add a README", "Add .gitignore" ni licencia: el proyecto ya
+   los trae y chocarían.
+4. Cree el repositorio y copie la URL que le muestra.
+
+Después, en la terminal del proyecto:
+
+```bash
+git remote add origin https://github.com/USUARIO/nandez-cafe.git
+git branch -M main
+git push -u origin main
+```
+
+Cambie `USUARIO` por su usuario de GitHub. Si le pide clave, GitHub ya no acepta
+la contraseña: hay que generar un token en
+<https://github.com/settings/tokens> (clásico, permiso `repo`) y pegarlo como
+contraseña.
+
+**La base de datos no se sube**, y está bien: `.gitignore` excluye `data/`.
+Sus lotes y ventas se quedan en su computador; el servidor en línea arranca
+vacío. Más abajo está cómo pasar lo que ya tiene.
+
+## 2. Crear el servicio en Render
+
+1. Entre a <https://render.com> y cree la cuenta (puede ser con GitHub).
+2. En el panel: **New** → **Blueprint**.
+3. Conecte su cuenta de GitHub y autorice el repositorio `nandez-cafe`.
+4. Render lee `render.yaml` solo y le muestra un servicio llamado
+   **nandez-cafe** con el disco de 1 GB. Confirme.
+5. Le pedirá la tarjeta, porque el plan Starter es de pago.
+6. **Apply** y espere. El primer despliegue toma unos minutos: instala las
+   dependencias y arranca el servidor.
+
+Cuando termine, Render le da una dirección del estilo
+`https://nandez-cafe.onrender.com`. Esa es la que se comparte.
+
+## 3. Copiar la clave de acceso
+
+Render generó una clave sola. Para verla:
+
+1. Entre al servicio **nandez-cafe**.
+2. Pestaña **Environment**.
+3. Busque `API_TOKEN` y cópiela.
+
+Es **distinta** de la que usa en su computador, y así debe ser: si alguna vez
+hay que cambiar la de internet, la local no se toca.
+
+## 4. Entrar desde los celulares
+
+1. Abra `https://nandez-cafe.onrender.com` en el celular.
+2. El panel muestra la pantalla **Clave de acceso**.
+3. Pegue la clave y toque **Entrar**. Queda guardada en ese celular; no la vuelve
+   a pedir.
+
+Lo mismo en el celular de su hermano. La misma clave sirve para los dos.
+
+## 5. Pasar lo que ya tiene registrado
+
+El servidor en línea arranca vacío. Hoy eso es poco: un lote de café, cuatro
+presentaciones y un productor. Lo más sencillo es volver a registrarlo a mano
+desde el panel en línea, son unos minutos:
+
+- **Finca → Productores:** Productor Uno, Chinácota.
+- **Café → Lotes:** DT-2026-01, 2026-10-21, compra, castillo, pergamino seco,
+  51 kg, $22.000/kg (valor total $1.122.000).
+- **Café → Presentaciones:** las cuatro bolsas, con su costo de empaque y precio
+  cuando los tenga.
+
+De ahí en adelante registre siempre en el de internet, para no terminar con dos
+contabilidades distintas. Cuando confirme que todo está en línea, deje de usar
+el local.
+
+---
+
+## Lo que falta decidir
+
+**Respaldos.** El disco de Render guarda el archivo entre despliegues, pero el
+plan Starter no le hace copias. Si se daña, se pierde la contabilidad. Hoy no hay
+forma de bajar el archivo desde el panel: hay que agregar una ruta protegida
+para descargarlo, o una tarea programada que lo copie. Pendiente.
+
+**Una clave por persona.** Hoy la clave es compartida, así que el sistema no
+distingue quién registró qué. Mientras tanto, llenen el campo **Responsable** en
+los procesos y **Cliente** en las ventas.
+
+## Si algo sale mal
+
+- **El despliegue falla en `npm ci`:** revise que `package-lock.json` esté
+  subido (sí lo está) y que Render use Node 24 (`NODE_VERSION` ya lo fija).
+- **Responde "Token inválido o ausente":** la clave está mal copiada. Vuelva a
+  copiarla de Environment, completa y sin espacios.
+- **El panel carga pero sin datos:** normal al principio; el servidor en línea
+  arranca con su propia base vacía.
+- **Cambió algo en el código:** con `git push` Render vuelve a desplegar solo.
+- **Ver qué pasó:** pestaña **Logs** del servicio en Render.

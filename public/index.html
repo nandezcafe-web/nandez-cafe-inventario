@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nández Café</title>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="cabecera">
+      <a class="marca" href="#/resumen">☕ <span>Nández Café</span></a>
+      <nav id="nav" aria-label="Áreas"></nav>
+    </div>
+    <nav id="subnav" aria-label="Secciones del área"></nav>
+  </header>
+  <main id="vista" tabindex="-1"></main>
+
+  <dialog id="dialogo">
+    <form method="dialog" id="form-dialogo" novalidate></form>
+  </dialog>
+
+  <div id="aviso" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

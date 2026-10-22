@@ -1,0 +1,21 @@
+{
+  "name": "nandez-cafe-servidor",
+  "version": "0.1.0",
+  "description": "Nández Café — servidor del sistema de cultivo, transformación y contabilidad del café. Chinácota, Norte de Santander",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "demo": "node --env-file-if-exists=.env scripts/generar-demo.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "leaflet": "^1.9.4",
+    "multer": "^2.0.0"
+  }
+}
