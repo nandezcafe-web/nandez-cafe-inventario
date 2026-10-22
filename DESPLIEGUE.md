@@ -17,8 +17,9 @@ a usted en el navegador, en este orden.
 1. En <https://supabase.com>, **New project**, en la misma organización de la
    página web.
 2. Nombre: `nandez-cafe-inventario`.
-3. **Región: East US (North Virginia).** Es donde Vercel corre sus funciones;
-   si la base queda lejos, cada consulta cruza el continente.
+3. **Región: West US (Oregon).** `vercel.json` pone las funciones en Oregon
+   (`"regions": ["pdx1"]`) para que cada consulta no cruce el continente. Si
+   elige otra región, cambie esa línea por la región de Vercel más cercana.
 4. Ponga una contraseña larga para la base y **guárdela**.
 5. Cuando termine de crearse: botón **Connect** (arriba) → **Transaction
    pooler**. Copie esa cadena: empieza con `postgresql://` y usa el puerto
@@ -27,7 +28,7 @@ a usted en el navegador, en este orden.
 6. En el archivo `.env` del computador, agregue una línea:
 
    ```
-   DATABASE_URL=postgresql://postgres.xxxx:SU_CONTRASEÑA@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   DATABASE_URL=postgresql://postgres.xxxx:SU_CONTRASEÑA@aws-1-us-west-2.pooler.supabase.com:6543/postgres
    ```
 
    reemplazando `[YOUR-PASSWORD]` por la contraseña del paso 4. Ese archivo no

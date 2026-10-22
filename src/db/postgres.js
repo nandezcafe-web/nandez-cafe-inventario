@@ -112,7 +112,11 @@ export async function conectarSupabase(url) {
     // El "transaction pooler" de Supabase (puerto 6543) no admite sentencias
     // preparadas: con cada petición puede tocar otra conexión.
     prepare: false,
-    max: 3,
+    // Tampoco aguanta varias consultas en vuelo por la misma conexión: si se
+    // manda la segunda antes de que llegue la respuesta de la primera, a veces
+    // esa respuesta nunca llega y la petición se queda colgada para siempre.
+    // Por eso una sola conexión y las consultas por turnos (ver enTurno).
+    max: 1,
     idle_timeout: 20,
     connect_timeout: 15,
     onnotice: () => {}, // "ya existe la tabla…" de CREATE IF NOT EXISTS no es un problema
@@ -121,18 +125,27 @@ export async function conectarSupabase(url) {
       bigint: { to: INT8, from: [INT8], serialize: (x) => String(x), parse: (x) => Number(x) },
     },
   });
-  const sobre = (s) => ({
+  // Cada consulta (o transacción completa) espera a que termine la anterior.
+  // Dentro de una transacción no hace falta: ese código ya espera cada
+  // respuesta, y la conexión es solo suya hasta el final.
+  let cola = Promise.resolve();
+  const enTurno = (fn) => {
+    const r = cola.then(fn);
+    cola = r.catch(() => {});
+    return r;
+  };
+  const sobre = (s, turno = (fn) => fn()) => ({
     async consultar(texto, params) {
-      const r = await s.unsafe(texto, params);
+      const r = await turno(() => s.unsafe(texto, params));
       return { filas: [...r], cambios: r.count ?? 0 };
     },
     async exec(texto) {
-      await s.unsafe(texto);
+      await turno(() => s.unsafe(texto));
     },
   });
   return new Postgres({
-    ...sobre(sql),
-    transaccion: (fn) => sql.begin((tx) => fn(sobre(tx))),
+    ...sobre(sql, enTurno),
+    transaccion: (fn) => enTurno(() => sql.begin((tx) => fn(sobre(tx)))),
     cerrar: () => sql.end({ timeout: 5 }),
   });
 }
