@@ -105,3 +105,15 @@ export const derivados = {
         : null),
   }),
 };
+
+// Campos que el servidor calcula y GUARDA al escribir, no solo al leer.
+// `total_cop` se mostraba vacío en la lista de ventas y en el CSV cuando no se
+// escribía a mano, que es el caso normal: la ayuda del campo dice que se
+// calcula. Guardarlo deja de acuerdo la lista, la exportación y los informes.
+export const calculados = {
+  ventas: (v) => {
+    if (v.total_cop == null && v.unidades != null && v.precio_unitario_cop != null) {
+      v.total_cop = Math.round(v.unidades * v.precio_unitario_cop - (v.descuento_cop ?? 0));
+    }
+  },
+};

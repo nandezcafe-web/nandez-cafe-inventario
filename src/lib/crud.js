@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ErrorHttp, noEncontrado } from './errores.js';
 import { validarRegistro, aSalida } from './validar.js';
-import { derivados } from './derivados.js';
+import { derivados, calculados } from './derivados.js';
 
 const LIMITE_DEFECTO = 200;
 const LIMITE_MAX = 5000;
@@ -91,6 +91,7 @@ export function crearRouterCrud(db, tabla, rec) {
     const datos = validarRegistro(rec, req.body);
     for (const n of automaticos) delete datos[n];
     if (rec.campos.registrado_por && req.usuario) datos.registrado_por = req.usuario;
+    calculados[tabla]?.(datos);
     const cols = Object.keys(datos);
     try {
       const info = cols.length
@@ -106,7 +107,8 @@ export function crearRouterCrud(db, tabla, rec) {
 
   const actualizar = (parcial) => (req, res) => {
     const id = Number(req.params.id);
-    if (!leerUno(db, tabla, rec, id)) throw noEncontrado();
+    const actual = leerUno(db, tabla, rec, id);
+    if (!actual) throw noEncontrado();
     const datos = validarRegistro(rec, req.body, { parcial });
     // En PUT, los campos omitidos quedan vacíos (reemplazo completo).
     if (!parcial) {
@@ -114,6 +116,16 @@ export function crearRouterCrud(db, tabla, rec) {
     }
     // Quién registró no se reescribe: ni al editar ni con un PUT completo.
     for (const n of automaticos) delete datos[n];
+    // Los calculados se recalculan sobre el registro completo, no solo sobre
+    // lo que llegó en un PATCH.
+    if (calculados[tabla]) {
+      const completo = { ...actual, ...datos };
+      if (!Object.hasOwn(req.body ?? {}, 'total_cop')) completo.total_cop = null;
+      calculados[tabla](completo);
+      for (const [k, v] of Object.entries(completo)) {
+        if (Object.hasOwn(rec.campos, k) && v !== actual[k]) datos[k] = v;
+      }
+    }
     const cols = Object.keys(datos);
     if (cols.length) {
       try {

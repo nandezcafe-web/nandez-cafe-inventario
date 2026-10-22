@@ -564,3 +564,27 @@ test('sin claves por persona todo sigue funcionando sin nombre', async () => {
   });
   assert.equal(g.json.registrado_por, null);
 });
+
+test('el total de la venta se guarda calculado, no solo al mostrar', async () => {
+  const v = await pedir('/api/ventas', {
+    metodo: 'POST',
+    cuerpo: {
+      fecha: '2026-10-28', canal: 'directo', cliente: 'Vecino',
+      unidades: 3, precio_unitario_cop: 24000, descuento_cop: 2000,
+    },
+  });
+  assert.equal(v.status, 201);
+  assert.equal(v.json.total_cop, 70000, '3 × 24.000 − 2.000, guardado en la columna');
+
+  // Guardado de verdad: aparece en el CSV, que lee las columnas crudas.
+  const csv = await (await fetch(`${base}/api/exportar/ventas.csv`)).text();
+  assert.ok(csv.includes('70000'), 'el CSV trae el total');
+
+  // Si cambian las unidades, el total se recalcula.
+  const editada = await pedir(`/api/ventas/${v.json.id}`, { metodo: 'PATCH', cuerpo: { unidades: 5 } });
+  assert.equal(editada.json.total_cop, 118000, '5 × 24.000 − 2.000');
+
+  // Pero un total escrito a mano se respeta.
+  const aMano = await pedir(`/api/ventas/${v.json.id}`, { metodo: 'PATCH', cuerpo: { total_cop: 100000 } });
+  assert.equal(aMano.json.total_cop, 100000);
+});

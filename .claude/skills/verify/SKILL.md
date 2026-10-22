@@ -106,6 +106,12 @@ Puntos que conviene revisar en cualquier cambio de navegación o de panel:
 - **La clave de acceso.** Si `.env` define `API_TOKEN`, el panel muestra la
   pantalla **Clave de acceso** antes de cualquier dato. El enlace
   `…/?token=<clave>` entra directo y la clave se borra de la dirección.
+- **El sembrador necesita clave** si la instancia la pide:
+  `CLAVE=clave-de-prueba-123 node .claude/skills/verify/sembrar-escenario.mjs`.
+- **Claves con nombre.** `USUARIOS="Maick:clave1,Hermano:clave2"` identifica a
+  quien entra y marca `registrado_por` en lotes, procesos, ventas y gastos.
+  Para probar el panel con nombre, levantar una instancia con claves
+  desechables en vez de usar las reales.
 - **No imprimir la clave real** en comandos ni en informes: está en `.env`.
   Para probar, usar una instancia con clave desechable.
 - **Escribir en la base real.** Conducir formularios que guardan (Registrar

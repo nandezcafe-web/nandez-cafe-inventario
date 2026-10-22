@@ -1,10 +1,16 @@
 // Escenario realista para juzgar la densidad de las secciones de Café.
 const BASE = 'http://localhost:3100/api';
 
+// Si la instancia pide clave: CLAVE=... node sembrar-escenario.mjs
+const CLAVE = process.env.CLAVE ?? '';
+
 const post = async (ruta, cuerpo) => {
   const r = await fetch(`${BASE}${ruta}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(CLAVE ? { Authorization: `Bearer ${CLAVE}` } : {}),
+    },
     body: JSON.stringify(cuerpo),
   });
   const j = await r.json();
@@ -105,10 +111,11 @@ for (const [fecha, categoria, descripcion, valor_cop] of gastos) {
 }
 await post('/gastos', { fecha: '2026-09-01', categoria: 'equipos', descripcion: 'Tostadora 5 kg', valor_cop: 6200000, tipo_costo: 'inversion' });
 
-const r = await (await fetch(`${BASE}/costos/lotes`)).json();
+const cab = CLAVE ? { Authorization: `Bearer ${CLAVE}` } : {};
+const r = await (await fetch(`${BASE}/costos/lotes`, { headers: cab })).json();
 console.log('lotes sembrados:');
 for (const l of r.datos) {
   console.log(` ${l.codigo} · ${l.procesos} procesos · ${l.estado_final} · $${l.cop_por_kg_final}/kg · ${l.kg_disponible.toFixed(2)} kg disp`);
 }
-const res = await (await fetch(`${BASE}/contabilidad/resultados?desde=2026-09-01&hasta=2026-10-31`)).json();
+const res = await (await fetch(`${BASE}/contabilidad/resultados?desde=2026-09-01&hasta=2026-10-31`, { headers: cab })).json();
 console.log(`ingresos $${res.ingresos_cop} · margen bruto $${res.margen_bruto_cop} · utilidad $${res.utilidad_operativa_cop}`);
