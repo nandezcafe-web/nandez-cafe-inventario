@@ -4,7 +4,8 @@ MVP 0 del plan maestro (Chinácota, Norte de Santander): un sistema interno para
 
 - **Stack:** Node.js 24, Express 5. La base es **SQLite** en el computador y **Postgres (Supabase)** en línea: el mismo código corre en las dos, a través de la capa de [src/db/](src/db/index.js).
 - **Datos en el computador:** un solo archivo, `data/cafe.db`, más las fotos en `data/uploads/`. **En línea:** Supabase para la base y Supabase Storage para las fotos; Vercel sirve el panel y corre el servidor como funciones. Cómo ponerlo en línea: [DESPLIEGUE.md](DESPLIEGUE.md).
-- **Panel web:** `http://localhost:3000` en el computador, o la dirección de Vercel; pensado para computador y celular.
+- **En línea:** <https://nandez-cafe-inventario.vercel.app> (Vercel en Oregon + Supabase en us-west-2, plan gratis). Cada persona entra con su enlace personal, que lleva su clave; los enlaces viven en `ENLACES-EN-LINEA.md`, que no se sube al repositorio.
+- **Panel web:** `http://localhost:3000` en el computador, o la dirección de arriba; pensado para computador y celular.
 - **Pruebas:** `npm test` corre las pruebas sobre SQLite; `BD_PRUEBAS=pglite:memoria npm run test:postgres` corre **las mismas** sobre un Postgres real dentro de Node (PGlite), sin tocar Supabase.
 - **Navegación:** cinco áreas fijas (**Hoy · Café · Cultivo · Biomasa · Finca**) y, dentro de cada una, sus secciones. El área recuerda en qué sección se quedó.
 - **El café comprado y el cultivo propio no se mezclan.** **Hoy** es el tablero del café que se compra y transforma: inventario, costo del kg tostado, el siguiente paso del proceso y los pendientes del café. El cultivo de la finca tiene su propio resumen en **Cultivo → Resumen** (plantas, clima, alertas agronómicas, lotes). Las alertas vienen marcadas con `grupo: "cafe"` o `grupo: "cultivo"` y cada área muestra solo las suyas; si hay alertas altas del cultivo, el inicio lo dice en una línea sin llenarse de ellas.
