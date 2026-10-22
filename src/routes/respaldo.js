@@ -18,10 +18,10 @@ import { ErrorHttp } from '../lib/errores.js';
 export function routerRespaldo(db) {
   const r = Router();
 
-  r.get('/', (_req, res) => {
+  r.get('/', async (_req, res) => {
     const temporal = path.join(os.tmpdir(), `respaldo-${crypto.randomUUID()}.sqlite`);
     try {
-      db.prepare('VACUUM INTO ?').run(temporal);
+      await db.respaldarEn(temporal);
     } catch (e) {
       throw new ErrorHttp(500, `No se pudo preparar el respaldo: ${e.message}`);
     }

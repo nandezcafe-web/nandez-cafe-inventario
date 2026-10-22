@@ -49,21 +49,24 @@ function rangoEsperado(p) {
 
 // Cadena completa de un lote: entrada, cada proceso, costo por kg por estado,
 // inventario disponible y avisos cuando un pesaje se sale de lo esperado.
-export function cadenaCostoLote(db, loteId) {
-  const lote = db.prepare('SELECT * FROM lotes_cafe WHERE id = ?').get(loteId);
+export async function cadenaCostoLote(db, loteId) {
+  const lote = await db.uno('SELECT * FROM lotes_cafe WHERE id = ?', [loteId]);
   if (!lote) return null;
 
-  const procesos = db
-    .prepare('SELECT * FROM procesos_cafe WHERE lote_cafe_id = ? ORDER BY fecha ASC, id ASC')
-    .all(loteId);
-  const ventas = db
-    .prepare(`SELECT v.*, pr.gramos AS pres_gramos, pr.estado_cafe AS pres_estado, pr.nombre AS pres_nombre
-              FROM ventas v LEFT JOIN presentaciones pr ON pr.id = v.presentacion_id
-              WHERE v.lote_cafe_id = ? ORDER BY v.fecha ASC, v.id ASC`)
-    .all(loteId);
-  const gastosLote = db
-    .prepare("SELECT * FROM gastos WHERE lote_cafe_id = ? AND COALESCE(tipo_costo,'operativo') = 'operativo'")
-    .all(loteId);
+  const procesos = await db.todos(
+    'SELECT * FROM procesos_cafe WHERE lote_cafe_id = ? ORDER BY fecha ASC, id ASC',
+    [loteId],
+  );
+  const ventas = await db.todos(
+    `SELECT v.*, pr.gramos AS pres_gramos, pr.estado_cafe AS pres_estado, pr.nombre AS pres_nombre
+     FROM ventas v LEFT JOIN presentaciones pr ON pr.id = v.presentacion_id
+     WHERE v.lote_cafe_id = ? ORDER BY v.fecha ASC, v.id ASC`,
+    [loteId],
+  );
+  const gastosLote = await db.todos(
+    "SELECT * FROM gastos WHERE lote_cafe_id = ? AND COALESCE(tipo_costo,'operativo') = 'operativo'",
+    [loteId],
+  );
 
   const entrada = costoEntradaLote(lote);
   const avisos = [];
@@ -240,16 +243,16 @@ export function cadenaCostoLote(db, loteId) {
 }
 
 // Inventario de café de todos los lotes, por estado.
-export function inventarioCafe(db, { incluirAgotados = false } = {}) {
-  const lotes = db
-    .prepare(`SELECT id FROM lotes_cafe ${incluirAgotados ? '' : "WHERE COALESCE(estado,'en_proceso') <> 'descartado'"} ORDER BY fecha ASC, id ASC`)
-    .all();
+export async function inventarioCafe(db, { incluirAgotados = false } = {}) {
+  const lotes = await db.todos(
+    `SELECT id FROM lotes_cafe ${incluirAgotados ? '' : "WHERE COALESCE(estado,'en_proceso') <> 'descartado'"} ORDER BY fecha ASC, id ASC`,
+  );
 
   const porEstado = new Map();
   const porLote = [];
 
   for (const { id } of lotes) {
-    const c = cadenaCostoLote(db, id);
+    const c = await cadenaCostoLote(db, id);
     if (!c) continue;
     const etapas = c.etapas.filter((e) => e.kg_disponible > 0.001);
     if (etapas.length || incluirAgotados) {
@@ -287,18 +290,20 @@ export function inventarioCafe(db, { incluirAgotados = false } = {}) {
 
 // Estado de resultados del periodo: ingresos, costo de lo vendido, gastos y
 // utilidad. Más cuentas por cobrar y plata que salió en compras.
-export function estadoResultados(db, { desde, hasta } = {}) {
+export async function estadoResultados(db, { desde, hasta } = {}) {
   const cond = [];
   const params = [];
   if (desde) { cond.push('fecha >= ?'); params.push(desde); }
   if (hasta) { cond.push('fecha <= ?'); params.push(hasta); }
   const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
 
-  const ventas = db.prepare(`
+  const ventas = await db.todos(`
     SELECT v.*, pr.gramos AS pres_gramos, pr.estado_cafe AS pres_estado
     FROM ventas v LEFT JOIN presentaciones pr ON pr.id = v.presentacion_id
-    ${where ? where.replace(/fecha/g, 'v.fecha') : ''} ORDER BY v.fecha ASC`).all(...params);
+    ${where ? where.replace(/fecha/g, 'v.fecha') : ''} ORDER BY v.fecha ASC`, params);
 
+  // Una cadena por lote aunque el lote tenga muchas ventas: se guarda la
+  // promesa, así dos ventas del mismo lote no la calculan dos veces.
   const cache = new Map();
   const cadena = (loteId) => {
     if (!cache.has(loteId)) cache.set(loteId, cadenaCostoLote(db, loteId));
@@ -319,7 +324,7 @@ export function estadoResultados(db, { desde, hasta } = {}) {
 
     let costo = null;
     if (v.lote_cafe_id) {
-      const c = cadena(v.lote_cafe_id);
+      const c = await cadena(v.lote_cafe_id);
       const estado = v.estado_cafe ?? v.pres_estado;
       const etapa = c?.etapas.find((e) => e.estado === estado);
       if (etapa) costo = kg * etapa.cop_por_kg;
@@ -336,7 +341,7 @@ export function estadoResultados(db, { desde, hasta } = {}) {
     acc.costo_cop += costo ?? 0;
   }
 
-  const gastos = db.prepare(`SELECT * FROM gastos ${where}`).all(...params);
+  const gastos = await db.todos(`SELECT * FROM gastos ${where}`, params);
   const operativos = gastos.filter((g) => (g.tipo_costo ?? 'operativo') === 'operativo' && !g.lote_cafe_id);
   const inversiones = gastos.filter((g) => g.tipo_costo === 'inversion');
 
@@ -352,24 +357,24 @@ export function estadoResultados(db, { desde, hasta } = {}) {
   // La depreciación es la cuota de las inversiones que le toca a este periodo,
   // aunque se hayan comprado antes. Sin ella la utilidad sale infladísima el
   // mes siguiente a comprar un equipo.
-  const amortizacion = amortizacionPeriodo(db, { desde, hasta });
+  const amortizacion = await amortizacionPeriodo(db, { desde, hasta });
   const margenBruto = ingresos - costoVendido;
   const utilidad = margenBruto - gastosOperativos - amortizacion.cop;
   // Vender un equipo no es operación del café: va después de la utilidad
   // operativa. Es ganancia si se recibió más de lo que quedaba en libros.
   const resultadoPeriodo = utilidad + amortizacion.resultado_ventas_cop;
 
-  const compras = db.prepare(`
+  const compras = await db.uno(`
     SELECT COUNT(*) AS lotes,
            SUM(COALESCE(valor_compra_cop, COALESCE(precio_cop_kg,0) * COALESCE(kg_inicial,0))
                + COALESCE(costo_transporte_cop,0) + COALESCE(otros_costos_cop,0)) AS valor_cop,
            SUM(COALESCE(kg_inicial,0)) AS kg
-    FROM lotes_cafe ${where}`).get(...params);
+    FROM lotes_cafe ${where}`, params);
 
-  const porCobrar = db.prepare(`
+  const porCobrar = await db.uno(`
     SELECT COUNT(*) AS ventas,
            SUM(COALESCE(total_cop, COALESCE(precio_unitario_cop,0) * COALESCE(unidades,0) - COALESCE(descuento_cop,0))) AS valor_cop
-    FROM ventas WHERE estado_pago IN ('pendiente','parcial')`).get();
+    FROM ventas WHERE estado_pago IN ('pendiente','parcial')`);
 
   const avisos = [];
   if (sinCosto) {
@@ -408,7 +413,7 @@ export function estadoResultados(db, { desde, hasta } = {}) {
     inversiones_cop: r0(inversiones.reduce((s, g) => s + (g.valor_cop ?? 0), 0)),
     compras: { lotes: compras.lotes ?? 0, kg: r2(compras.kg ?? 0), valor_cop: r0(compras.valor_cop ?? 0) },
     por_cobrar: { ventas: porCobrar.ventas ?? 0, valor_cop: r0(porCobrar.valor_cop ?? 0) },
-    inventario_valor_cop: inventarioCafe(db).total_valor_cop,
+    inventario_valor_cop: (await inventarioCafe(db)).total_valor_cop,
     avisos,
     aviso: 'La utilidad operativa descuenta la depreciación de las inversiones que tengan vida útil (campo "amortizar meses"); las que no la tengan no cargan nada. La venta de un equipo va aparte, después de la utilidad operativa. No se descuenta su propio tiempo si no está registrado como gasto de mano de obra.',
   };
@@ -436,12 +441,12 @@ const mesIndice = (fecha) => {
 // deja de cargar costo.
 const mesTexto = (indice) => `${String(Math.floor(indice / 12)).padStart(4, '0')}-${String((indice % 12) + 1).padStart(2, '0')}`;
 
-export function amortizacionPeriodo(db, { desde, hasta, hoy } = {}) {
-  const filas = db
-    .prepare(`SELECT id, fecha, descripcion, categoria, valor_cop, amortizar_meses,
-                     valor_residual_cop, fecha_venta, valor_venta_cop
-              FROM gastos WHERE tipo_costo = 'inversion'`)
-    .all();
+export async function amortizacionPeriodo(db, { desde, hasta, hoy } = {}) {
+  const filas = await db.todos(
+    `SELECT id, fecha, descripcion, categoria, valor_cop, amortizar_meses,
+            valor_residual_cop, fecha_venta, valor_venta_cop
+     FROM gastos WHERE tipo_costo = 'inversion'`,
+  );
 
   const hoyMes = mesIndice(hoy ?? new Date().toISOString().slice(0, 10));
   const desdeMes = desde ? mesIndice(desde) : null;
@@ -541,7 +546,7 @@ export function amortizacionPeriodo(db, { desde, hasta, hoy } = {}) {
 
 // Gasto general por kg producido en un periodo: sirve para repartir los gastos
 // que no son de ningún lote al fijar precios.
-export function gastoGeneralPorKg(db, { desde, hasta, estado = 'tostado_grano' } = {}) {
+export async function gastoGeneralPorKg(db, { desde, hasta, estado = 'tostado_grano' } = {}) {
   const cond = [];
   const params = [];
   if (desde) { cond.push('fecha >= ?'); params.push(desde); }
@@ -550,19 +555,22 @@ export function gastoGeneralPorKg(db, { desde, hasta, estado = 'tostado_grano' }
 
   const marcas = CATEGORIAS_POR_UNIDAD.map(() => '?').join(',');
   const base = `FROM gastos ${where}${where ? ' AND' : ' WHERE'} lote_cafe_id IS NULL AND COALESCE(tipo_costo,'operativo') = 'operativo'`;
-  const gastos = db
-    .prepare(`SELECT SUM(valor_cop) AS v ${base} AND COALESCE(categoria,'') NOT IN (${marcas})`)
-    .get(...params, ...CATEGORIAS_POR_UNIDAD);
-  const porUnidad = db
-    .prepare(`SELECT SUM(valor_cop) AS v ${base} AND COALESCE(categoria,'') IN (${marcas})`)
-    .get(...params, ...CATEGORIAS_POR_UNIDAD);
-  const kg = db
-    .prepare(`SELECT SUM(COALESCE(kg_salida,0)) AS kg FROM procesos_cafe ${where}${where ? ' AND' : ' WHERE'} estado_salida = ?`)
-    .get(...params, estado);
+  const gastos = await db.uno(
+    `SELECT SUM(valor_cop) AS v ${base} AND COALESCE(categoria,'') NOT IN (${marcas})`,
+    [...params, ...CATEGORIAS_POR_UNIDAD],
+  );
+  const porUnidad = await db.uno(
+    `SELECT SUM(valor_cop) AS v ${base} AND COALESCE(categoria,'') IN (${marcas})`,
+    [...params, ...CATEGORIAS_POR_UNIDAD],
+  );
+  const kg = await db.uno(
+    `SELECT SUM(COALESCE(kg_salida,0)) AS kg FROM procesos_cafe ${where}${where ? ' AND' : ' WHERE'} estado_salida = ?`,
+    [...params, estado],
+  );
 
   // Las inversiones no entran por su valor completo: entran por la cuota de
   // amortización que le toca al periodo.
-  const amortizacion = amortizacionPeriodo(db, { desde, hasta });
+  const amortizacion = await amortizacionPeriodo(db, { desde, hasta });
 
   const operativos = gastos?.v ?? 0;
   const excluido = porUnidad?.v ?? 0;

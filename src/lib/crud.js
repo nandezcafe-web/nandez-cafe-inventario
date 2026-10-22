@@ -6,17 +6,20 @@ import { derivados, calculados } from './derivados.js';
 const LIMITE_DEFECTO = 200;
 const LIMITE_MAX = 5000;
 
+// SQLite y Postgres dicen lo mismo con palabras distintas ("FOREIGN KEY
+// constraint failed" / "violates foreign key constraint"), por eso se compara
+// sin mayúsculas.
 export function traducirErrorSql(e) {
-  const msg = String(e?.message ?? '');
-  if (msg.includes('FOREIGN KEY')) {
+  const msg = String(e?.message ?? '').toLowerCase();
+  if (msg.includes('foreign key')) {
     return new ErrorHttp(409, 'Referencia inválida o registro en uso por otros datos (no se puede borrar mientras tenga registros asociados)');
   }
-  if (msg.includes('UNIQUE')) return new ErrorHttp(409, 'Ya existe un registro con esos mismos datos');
+  if (msg.includes('unique')) return new ErrorHttp(409, 'Ya existe un registro con esos mismos datos');
   return e;
 }
 
-export function leerUno(db, tabla, rec, id) {
-  const fila = db.prepare(`SELECT * FROM "${tabla}" WHERE id = ?`).get(id);
+export async function leerUno(db, tabla, rec, id) {
+  const fila = await db.uno(`SELECT * FROM "${tabla}" WHERE id = ?`, [id]);
   if (!fila) return null;
   const salida = aSalida(rec, { ...fila });
   return derivados[tabla] ? derivados[tabla](salida) : salida;
@@ -59,7 +62,7 @@ export function crearRouterCrud(db, tabla, rec) {
     return derivados[tabla] ? derivados[tabla](s) : s;
   };
 
-  r.get('/', (req, res) => {
+  r.get('/', async (req, res) => {
     const { sql, params } = filtrosDesdeQuery(rec, req.query);
     const columnasOrden = new Set(['id', 'creado_en', 'actualizado_en', ...Object.keys(rec.campos)]);
     const orden = columnasOrden.has(req.query.orden) ? req.query.orden : (rec.campoFecha ?? 'id');
@@ -67,16 +70,17 @@ export function crearRouterCrud(db, tabla, rec) {
     const limite = Math.min(Math.max(Number(req.query.limite) || LIMITE_DEFECTO, 1), LIMITE_MAX);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
 
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM "${tabla}" ${sql}`).get(...params).n;
-    const filas = db
-      .prepare(`SELECT * FROM "${tabla}" ${sql} ORDER BY "${orden}" ${dir}, id DESC LIMIT ? OFFSET ?`)
-      .all(...params, limite, offset);
+    const total = Number((await db.uno(`SELECT COUNT(*) AS n FROM "${tabla}" ${sql}`, params)).n);
+    const filas = await db.todos(
+      `SELECT * FROM "${tabla}" ${sql} ORDER BY "${orden}" ${dir}, id DESC LIMIT ? OFFSET ?`,
+      [...params, limite, offset],
+    );
 
     res.json({ datos: filas.map((f) => salida({ ...f })), total, limite, offset });
   });
 
-  r.get('/:id', (req, res) => {
-    const fila = leerUno(db, tabla, rec, Number(req.params.id));
+  r.get('/:id', async (req, res) => {
+    const fila = await leerUno(db, tabla, rec, Number(req.params.id));
     if (!fila) throw noEncontrado();
     res.json(fila);
   });
@@ -87,27 +91,29 @@ export function crearRouterCrud(db, tabla, rec) {
   // para que nadie los mande en el cuerpo, y no se tocan al actualizar.
   const automaticos = Object.entries(rec.campos).filter(([, d]) => d.auto).map(([n]) => n);
 
-  r.post('/', (req, res) => {
+  r.post('/', async (req, res) => {
     const datos = validarRegistro(rec, req.body);
     for (const n of automaticos) delete datos[n];
     if (rec.campos.registrado_por && req.usuario) datos.registrado_por = req.usuario;
     calculados[tabla]?.(datos);
     const cols = Object.keys(datos);
+    let creado;
     try {
-      const info = cols.length
-        ? db
-          .prepare(`INSERT INTO "${tabla}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
-          .run(...cols.map((c) => datos[c]))
-        : db.prepare(`INSERT INTO "${tabla}" DEFAULT VALUES`).run();
-      res.status(201).json(leerUno(db, tabla, rec, Number(info.lastInsertRowid)));
+      creado = cols.length
+        ? await db.uno(
+          `INSERT INTO "${tabla}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')}) RETURNING id`,
+          cols.map((c) => datos[c]),
+        )
+        : await db.uno(`INSERT INTO "${tabla}" DEFAULT VALUES RETURNING id`);
     } catch (e) {
       throw traducirErrorSql(e);
     }
+    res.status(201).json(await leerUno(db, tabla, rec, Number(creado.id)));
   });
 
-  const actualizar = (parcial) => (req, res) => {
+  const actualizar = (parcial) => async (req, res) => {
     const id = Number(req.params.id);
-    const actual = leerUno(db, tabla, rec, id);
+    const actual = await leerUno(db, tabla, rec, id);
     if (!actual) throw noEncontrado();
     const datos = validarRegistro(rec, req.body, { parcial });
     // En PUT, los campos omitidos quedan vacíos (reemplazo completo).
@@ -129,27 +135,29 @@ export function crearRouterCrud(db, tabla, rec) {
     const cols = Object.keys(datos);
     if (cols.length) {
       try {
-        db.prepare(
-          `UPDATE "${tabla}" SET ${cols.map((c) => `"${c}" = ?`).join(', ')},
-           actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
-        ).run(...cols.map((c) => datos[c]), id);
+        // La hora se pone aquí y no con strftime(), que solo existe en SQLite.
+        await db.ejecutar(
+          `UPDATE "${tabla}" SET ${cols.map((c) => `"${c}" = ?`).join(', ')}, actualizado_en = ? WHERE id = ?`,
+          [...cols.map((c) => datos[c]), new Date().toISOString(), id],
+        );
       } catch (e) {
         throw traducirErrorSql(e);
       }
     }
-    res.json(leerUno(db, tabla, rec, id));
+    res.json(await leerUno(db, tabla, rec, id));
   };
 
   r.put('/:id', actualizar(false));
   r.patch('/:id', actualizar(true));
 
-  r.delete('/:id', (req, res) => {
+  r.delete('/:id', async (req, res) => {
+    let info;
     try {
-      const info = db.prepare(`DELETE FROM "${tabla}" WHERE id = ?`).run(Number(req.params.id));
-      if (!info.changes) throw noEncontrado();
+      info = await db.ejecutar(`DELETE FROM "${tabla}" WHERE id = ?`, [Number(req.params.id)]);
     } catch (e) {
       throw traducirErrorSql(e);
     }
+    if (!info.cambios) throw noEncontrado();
     res.status(204).end();
   });
 

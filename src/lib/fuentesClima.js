@@ -8,27 +8,26 @@ import { ErrorHttp, invalido } from './errores.js';
 
 const HORA = 3_600_000;
 
-export function leerCache(db, clave) {
-  const fila = db.prepare('SELECT datos, obtenido_en FROM cache_externo WHERE clave = ?').get(clave);
+export async function leerCache(db, clave) {
+  const fila = await db.uno('SELECT datos, obtenido_en FROM cache_externo WHERE clave = ?', [clave]);
   return fila ? { datos: JSON.parse(fila.datos), obtenido_en: fila.obtenido_en } : null;
 }
 
-export function guardarCache(db, clave, datos) {
+export async function guardarCache(db, clave, datos) {
   const ahora = new Date().toISOString();
-  db.prepare(`INSERT INTO cache_externo (clave, datos, obtenido_en) VALUES (?, ?, ?)
-    ON CONFLICT (clave) DO UPDATE SET datos = excluded.datos, obtenido_en = excluded.obtenido_en`)
-    .run(clave, JSON.stringify(datos), ahora);
+  await db.ejecutar(`INSERT INTO cache_externo (clave, datos, obtenido_en) VALUES (?, ?, ?)
+    ON CONFLICT (clave) DO UPDATE SET datos = excluded.datos, obtenido_en = excluded.obtenido_en`, [clave, JSON.stringify(datos), ahora]);
   return ahora;
 }
 
 async function cacheado(db, clave, maxEdadMs, obtener) {
-  const previo = leerCache(db, clave);
+  const previo = await leerCache(db, clave);
   if (previo && Date.now() - Date.parse(previo.obtenido_en) < maxEdadMs) {
     return { ...previo, desde_cache: true, desactualizado: false };
   }
   try {
     const datos = await obtener();
-    const obtenido_en = guardarCache(db, clave, datos);
+    const obtenido_en = await guardarCache(db, clave, datos);
     return { datos, obtenido_en, desde_cache: false, desactualizado: false };
   } catch (e) {
     if (previo) return { ...previo, desde_cache: true, desactualizado: true, error: e.message };

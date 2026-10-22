@@ -27,16 +27,16 @@ const pedir = async (ruta, { metodo = 'GET', cuerpo, headers = {} } = {}) => {
 
 before(async () => {
   uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cafe-test-'));
-  db = abrirDb(':memory:');
-  sembrarSiVacia(db);
+  db = await abrirDb(':memory:');
+  await sembrarSiVacia(db);
   const app = crearApp(db, { apiToken: null, timezone: 'America/Bogota', uploadsDir, publicDir: path.resolve('public') });
   await new Promise((ok) => { servidor = app.listen(0, '127.0.0.1', ok); });
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
 
-after(() => {
+after(async () => {
   servidor.close();
-  db.close();
+  await db.cerrar();
   fs.rmSync(uploadsDir, { recursive: true, force: true });
 });
 
@@ -44,7 +44,7 @@ test('semilla: finca, 2 lotes y 8 ideas de oportunidad', async () => {
   const lotes = await pedir('/api/lotes');
   assert.equal(lotes.json.total, 2);
   assert.equal((await pedir('/api/oportunidades')).json.total, 8);
-  assert.equal(sembrarSiVacia(db), false, 'no debe volver a sembrar');
+  assert.equal(await sembrarSiVacia(db), false, 'no debe volver a sembrar');
 });
 
 test('CRUD de labores con validación', async () => {

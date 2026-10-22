@@ -43,8 +43,8 @@ async function fetchFalso(entrada) {
 }
 
 before(async () => {
-  db = abrirDb(':memory:');
-  sembrarSiVacia(db);
+  db = await abrirDb(':memory:');
+  await sembrarSiVacia(db);
   const app = crearApp(db, {
     apiToken: null, timezone: 'America/Bogota', uploadsDir: path.join(os.tmpdir(), 'cafe-mapa-test'), publicDir: path.resolve('public'),
     fetchImpl: fetchFalso, climaModelos: 'a,b,c',
@@ -53,9 +53,9 @@ before(async () => {
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
 
-after(() => {
+after(async () => {
   servidor.close();
-  db.close();
+  await db.cerrar();
 });
 
 test('geo: área, centroide y validación de polígonos', () => {

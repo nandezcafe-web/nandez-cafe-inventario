@@ -6,8 +6,8 @@ import { crearApp } from './app.js';
 import { sincronizarOpenMeteo } from './routes/clima.js';
 import { calcularPrediccion } from './lib/prediccion.js';
 
-const db = abrirDb(config.dbPath);
-if (sembrarSiVacia(db)) console.log('Base de datos nueva: se cargaron la finca, los lotes y las oportunidades iniciales.');
+const db = await abrirDb(config.dbPath);
+if (await sembrarSiVacia(db)) console.log('Base de datos nueva: se cargaron la finca, los lotes y las oportunidades iniciales.');
 
 const app = crearApp(db, config);
 const servidor = app.listen(config.port, config.host, () => {
@@ -22,7 +22,7 @@ const servidor = app.listen(config.port, config.host, () => {
 
 // Monitoreo automático de clima y riesgos para cada finca con coordenadas.
 async function monitorear() {
-  const fincas = db.prepare('SELECT id, nombre FROM fincas WHERE latitud IS NOT NULL AND longitud IS NOT NULL').all();
+  const fincas = await db.todos('SELECT id, nombre FROM fincas WHERE latitud IS NOT NULL AND longitud IS NOT NULL');
   for (const f of fincas) {
     try {
       const s = await sincronizarOpenMeteo(db, { fincaId: f.id, dias: 2, timezone: config.timezone, modelos: config.climaModelos });
@@ -43,8 +43,8 @@ if (config.climaAutoHoras > 0) {
 
 function cerrar() {
   clearInterval(temporizador);
-  servidor.close(() => {
-    db.close();
+  servidor.close(async () => {
+    await db.cerrar();
     process.exit(0);
   });
 }

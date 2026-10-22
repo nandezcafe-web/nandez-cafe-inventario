@@ -13,13 +13,13 @@ function celdaCsv(v) {
 // Separador ";" y BOM para que Excel en español lo abra correctamente.
 export function routerExportar(db) {
   const r = Router();
-  r.get('/:archivo', (req, res) => {
+  r.get('/:archivo', async (req, res) => {
     const tabla = req.params.archivo.replace(/\.csv$/, '');
     const rec = recursos[tabla];
     if (!rec) throw noEncontrado('Recurso');
     const { sql, params } = filtrosDesdeQuery(rec, req.query);
     const columnas = ['id', ...Object.keys(rec.campos), 'creado_en', 'actualizado_en'];
-    const filas = db.prepare(`SELECT * FROM "${tabla}" ${sql} ORDER BY id`).all(...params);
+    const filas = await db.todos(`SELECT * FROM "${tabla}" ${sql} ORDER BY id`, [...params]);
 
     const lineas = [columnas.join(';'), ...filas.map((f) => columnas.map((c) => celdaCsv(f[c])).join(';'))];
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

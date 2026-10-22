@@ -98,16 +98,16 @@ const pedir = async (ruta, { metodo = 'GET', cuerpo } = {}) => {
 
 before(async () => {
   uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cafe-pred-'));
-  db = abrirDb(':memory:');
-  sembrarSiVacia(db);
+  db = await abrirDb(':memory:');
+  await sembrarSiVacia(db);
   const app = crearApp(db, { apiToken: null, timezone: TZ, uploadsDir, publicDir: path.resolve('public'), fetchImpl: fetchFalso });
   await new Promise((ok) => { servidor = app.listen(0, '127.0.0.1', ok); });
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
 
-after(() => {
+after(async () => {
   servidor.close();
-  db.close();
+  await db.cerrar();
   fs.rmSync(uploadsDir, { recursive: true, force: true });
 });
 

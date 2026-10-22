@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { PLANTILLAS } from '../conocimiento/plan_cultivo.js';
 import { TIPO_A_VENTANA } from '../conocimiento/agroclima.js';
 import { recursos } from '../resources.js';
-import { transaccion } from '../db/index.js';
 import { ErrorHttp, invalido, noEncontrado } from '../lib/errores.js';
 import { sumarDias } from '../lib/derivados.js';
 import { validarRegistro } from '../lib/validar.js';
@@ -21,43 +20,46 @@ export function routerPlan(db, config) {
   const fetchImpl = config.fetchImpl ?? fetch;
 
   // Crea el plan base de un lote a partir de la plantilla de su etapa.
-  r.post('/generar', (req, res) => {
+  r.post('/generar', async (req, res) => {
     const hoy = hoyEn(config.timezone);
     const loteId = Number(req.body?.lote_id);
-    const lote = db.prepare('SELECT * FROM lotes WHERE id = ?').get(loteId);
+    const lote = await db.uno('SELECT * FROM lotes WHERE id = ?', [loteId]);
     if (!lote) throw invalido({ lote_id: 'el lote no existe' });
     const desde = req.body?.desde ? validarRegistro({ campos: { d: { tipo: 'fecha' } } }, { d: req.body.desde }).d : hoy;
     const etapa = req.body?.etapa ?? etapaDe(lote, hoy);
     const plantilla = PLANTILLAS[etapa];
     if (!plantilla) throw invalido({ etapa: `use: ${Object.keys(PLANTILLAS).join(', ')}` });
 
-    const existentes = db.prepare(
+    const existentes = Number((await db.uno(
       "SELECT COUNT(*) AS n FROM plan_labores WHERE lote_id = ? AND origen = 'plantilla' AND estado = 'pendiente'",
-    ).get(loteId).n;
+      [loteId],
+    )).n);
     if (existentes && !req.body?.reemplazar) {
       throw new ErrorHttp(409, `El lote ya tiene ${existentes} tareas de plantilla pendientes. Envíe "reemplazar": true para regenerarlas.`);
     }
 
-    const creadas = transaccion(db, () => {
+    const creadas = await db.transaccion(async () => {
       if (existentes) {
-        db.prepare("DELETE FROM plan_labores WHERE lote_id = ? AND origen = 'plantilla' AND estado = 'pendiente'").run(loteId);
+        await db.ejecutar("DELETE FROM plan_labores WHERE lote_id = ? AND origen = 'plantilla' AND estado = 'pendiente'", [loteId]);
       }
-      const stmt = db.prepare(`INSERT INTO plan_labores
+      const insertar = `INSERT INTO plan_labores
         (lote_id, tipo, titulo, fecha_programada, ventana_dias, repetir_cada_dias, prioridad, estado, origen, notas)
-        VALUES (?, ?, ?, ?, 3, ?, ?, 'pendiente', 'plantilla', ?)`);
-      return plantilla.map((t) => {
-        const info = stmt.run(loteId, t.tipo, t.titulo, sumarDias(desde, t.inicio), t.cada, t.prioridad,
-          'Tarea de plantilla: ajustar frecuencia, producto y dosis con el agrónomo.');
-        return leerUno(db, 'plan_labores', recursos.plan_labores, Number(info.lastInsertRowid));
-      });
+        VALUES (?, ?, ?, ?, 3, ?, ?, 'pendiente', 'plantilla', ?) RETURNING id`;
+      const filas = [];
+      for (const t of plantilla) {
+        const { id: nuevaId } = await db.uno(insertar, [loteId, t.tipo, t.titulo, sumarDias(desde, t.inicio), t.cada, t.prioridad,
+          'Tarea de plantilla: ajustar frecuencia, producto y dosis con el agrónomo.']);
+        filas.push(await leerUno(db, 'plan_labores', recursos.plan_labores, Number(nuevaId)));
+      }
+      return filas;
     });
     res.status(201).json({ lote: lote.nombre, etapa, desde, datos: creadas });
   });
 
   // Marca una tarea como hecha, registra la labor y programa la siguiente.
-  r.post('/:id/completar', (req, res) => {
+  r.post('/:id/completar', async (req, res) => {
     const id = Number(req.params.id);
-    const tarea = db.prepare('SELECT * FROM plan_labores WHERE id = ?').get(id);
+    const tarea = await db.uno('SELECT * FROM plan_labores WHERE id = ?', [id]);
     if (!tarea) throw noEncontrado('Tarea');
     if (tarea.estado !== 'pendiente') throw new ErrorHttp(409, `La tarea ya está ${tarea.estado}`);
 
@@ -77,27 +79,32 @@ export function routerPlan(db, config) {
       notas: [tarea.titulo, cuerpo.notas].filter(Boolean).join(' — '),
     });
 
-    const resultado = transaccion(db, () => {
+    const resultado = await db.transaccion(async () => {
       const cols = Object.keys(actividad).filter((c) => actividad[c] !== null);
-      const info = db.prepare(`INSERT INTO actividades (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${cols.map(() => '?').join(',')})`)
-        .run(...cols.map((c) => actividad[c]));
-      const actividadId = Number(info.lastInsertRowid);
-      db.prepare(`UPDATE plan_labores SET estado = 'hecha', actividad_id = ?,
-        actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).run(actividadId, id);
+      const info = await db.uno(
+        `INSERT INTO actividades (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${cols.map(() => '?').join(',')}) RETURNING id`,
+        cols.map((c) => actividad[c]),
+      );
+      const actividadId = Number(info.id);
+      // La hora va como parámetro: strftime() solo existe en SQLite.
+      await db.ejecutar(
+        "UPDATE plan_labores SET estado = 'hecha', actividad_id = ?, actualizado_en = ? WHERE id = ?",
+        [actividadId, new Date().toISOString(), id],
+      );
 
       let siguiente = null;
       if (tarea.repetir_cada_dias) {
-        const s = db.prepare(`INSERT INTO plan_labores
+        const s = await db.uno(`INSERT INTO plan_labores
           (lote_id, tipo, titulo, fecha_programada, ventana_dias, repetir_cada_dias, prioridad, estado, producto, dosis, unidad, responsable, origen, notas)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?)`).run(
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?) RETURNING id`, [
           tarea.lote_id, tarea.tipo, tarea.titulo, sumarDias(actividad.fecha, tarea.repetir_cada_dias), tarea.ventana_dias,
           tarea.repetir_cada_dias, tarea.prioridad, tarea.producto, tarea.dosis, tarea.unidad, tarea.responsable, tarea.origen, tarea.notas,
-        );
-        siguiente = leerUno(db, 'plan_labores', recursos.plan_labores, Number(s.lastInsertRowid));
+        ]);
+        siguiente = await leerUno(db, 'plan_labores', recursos.plan_labores, Number(s.id));
       }
       return {
-        actividad: leerUno(db, 'actividades', recursos.actividades, actividadId),
-        tarea: leerUno(db, 'plan_labores', recursos.plan_labores, id),
+        actividad: await leerUno(db, 'actividades', recursos.actividades, actividadId),
+        tarea: await leerUno(db, 'plan_labores', recursos.plan_labores, id),
         siguiente,
       };
     });
@@ -111,10 +118,10 @@ export function routerPlan(db, config) {
     const hoy = hoyEn(config.timezone);
     const hasta = sumarDias(hoy, dias);
 
-    const pendientes = db.prepare(`
+    const pendientes = await db.todos(`
       SELECT p.*, l.nombre AS lote FROM plan_labores p JOIN lotes l ON l.id = p.lote_id
       WHERE l.finca_id = ? AND p.estado = 'pendiente' AND p.fecha_programada <= ?
-      ORDER BY p.fecha_programada`).all(fincaId, hasta);
+      ORDER BY p.fecha_programada`, [fincaId, hasta]);
 
     const items = [];
     for (const t of pendientes) {

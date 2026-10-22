@@ -11,7 +11,7 @@ export function hoyEn(timezone) {
 }
 
 export async function calcularPrediccion(db, fincaId, { timezone, modelos, fetchImpl = fetch, hoy = hoyEn(timezone) }) {
-  const finca = db.prepare('SELECT * FROM fincas WHERE id = ?').get(fincaId);
+  const finca = await db.uno('SELECT * FROM fincas WHERE id = ?', [fincaId]);
   if (!finca) throw noEncontrado('Finca');
 
   const diario = await obtenerDiario(db, finca, { timezone, modelos, fetchImpl });
@@ -24,10 +24,11 @@ export async function calcularPrediccion(db, fincaId, { timezone, modelos, fetch
   }
 
   const { historial, pronostico } = separarDias(diario.datos.dias, hoy);
-  const lotes = db.prepare('SELECT * FROM lotes WHERE finca_id = ?').all(fincaId);
-  const floraciones = db.prepare(
+  const lotes = await db.todos('SELECT * FROM lotes WHERE finca_id = ?', [fincaId]);
+  const floraciones = await db.todos(
     'SELECT f.* FROM floraciones f JOIN lotes l ON l.id = f.lote_id WHERE l.finca_id = ? ORDER BY f.fecha',
-  ).all(fincaId);
+    [fincaId],
+  );
 
   const riesgos = evaluarRiesgos({ historial, pronostico, lotes, floraciones, enso: enso?.datos.actual ?? null, hoy });
   const suma = (xs, k) => Math.round(xs.reduce((s, d) => s + (d[k] ?? 0), 0) * 10) / 10;
@@ -61,6 +62,6 @@ export async function calcularPrediccion(db, fincaId, { timezone, modelos, fetch
   };
 
   // Último cálculo guardado: el resumen lo muestra sin volver a consultar internet.
-  guardarCache(db, `riesgos:finca:${fincaId}`, { hoy, riesgos, fuentes: resultado.fuentes });
+  await guardarCache(db, `riesgos:finca:${fincaId}`, { hoy, riesgos, fuentes: resultado.fuentes });
   return resultado;
 }

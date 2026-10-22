@@ -28,17 +28,17 @@ export function routerContabilidad(db) {
 
   // Costo completo de un lote: cada proceso, costo por kg en cada estado,
   // inventario y avisos de pesos raros.
-  r.get('/costos/lote/:id', (req, res) => {
-    const c = cadenaCostoLote(db, Number(req.params.id));
+  r.get('/costos/lote/:id', async (req, res) => {
+    const c = await cadenaCostoLote(db, Number(req.params.id));
     if (!c) throw noEncontrado('Lote de café');
     res.json(c);
   });
 
   // Resumen de todos los lotes para la lista del panel.
-  r.get('/costos/lotes', (_req, res) => {
-    const ids = db.prepare('SELECT id FROM lotes_cafe ORDER BY fecha DESC, id DESC').all();
-    const lotes = ids.map(({ id }) => {
-      const c = cadenaCostoLote(db, id);
+  r.get('/costos/lotes', async (_req, res) => {
+    const ids = await db.todos('SELECT id FROM lotes_cafe ORDER BY fecha DESC, id DESC');
+    const cadenas = await Promise.all(ids.map(({ id }) => cadenaCostoLote(db, id)));
+    const lotes = cadenas.map((c) => {
       return {
         ...c.lote,
         costo_entrada_cop: c.entrada.total_cop,
@@ -58,18 +58,18 @@ export function routerContabilidad(db) {
   });
 
   // Inventario de café por estado y por lote, valorizado al costo.
-  r.get('/inventario', (req, res) => {
-    res.json(inventarioCafe(db, { incluirAgotados: req.query.agotados === 'si' }));
+  r.get('/inventario', async (req, res) => {
+    res.json(await inventarioCafe(db, { incluirAgotados: req.query.agotados === 'si' }));
   });
 
   // Estado de resultados del periodo.
-  r.get('/contabilidad/resultados', (req, res) => {
-    res.json(estadoResultados(db, { desde: req.query.desde, hasta: req.query.hasta }));
+  r.get('/contabilidad/resultados', async (req, res) => {
+    res.json(await estadoResultados(db, { desde: req.query.desde, hasta: req.query.hasta }));
   });
 
   // Gastos generales por kg producido: para repartirlos al fijar precios.
-  r.get('/costos/gastos-por-kg', (req, res) => {
-    res.json(gastoGeneralPorKg(db, {
+  r.get('/costos/gastos-por-kg', async (req, res) => {
+    res.json(await gastoGeneralPorKg(db, {
       desde: req.query.desde,
       hasta: req.query.hasta,
       estado: req.query.estado ?? 'tostado_grano',
@@ -83,14 +83,14 @@ export function routerContabilidad(db) {
   r.post('/precios/sugerir', (req, res) => res.json(sugerirPrecio(req.body ?? {})));
 
   // Precio recomendado de cada presentación con el costo real de un lote.
-  r.get('/precios/lote/:id', (req, res) => {
-    const cadena = cadenaCostoLote(db, Number(req.params.id));
+  r.get('/precios/lote/:id', async (req, res) => {
+    const cadena = await cadenaCostoLote(db, Number(req.params.id));
     if (!cadena) throw noEncontrado('Lote de café');
-    const generalesCalc = gastoGeneralPorKg(db, {});
+    const generalesCalc = await gastoGeneralPorKg(db, {});
     const generales = req.query.gastos_generales_cop_kg !== undefined
       ? Number(req.query.gastos_generales_cop_kg)
       : (generalesCalc.cop_por_kg ?? 0);
-    const precios = preciosDeLote(db, {
+    const precios = await preciosDeLote(db, {
       cadena,
       gastos_generales_cop_kg: Number.isFinite(generales) ? generales : 0,
       iva_pct: Number(req.query.iva_pct ?? 0) || 0,

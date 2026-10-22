@@ -11,13 +11,13 @@ const diasEntre = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.pars
 
 // Alertas del negocio: frescura del tostado, pesos que no cuadran y precios
 // de lista por debajo del costo.
-function alertasNegocio(db, hoy) {
+async function alertasNegocio(db, hoy) {
   const alertas = [];
   const add = (nivel, tipo, mensaje, ref = {}) => alertas.push({ nivel, tipo, mensaje, grupo: 'cafe', ...ref });
 
-  const lotes = db.prepare("SELECT id, codigo FROM lotes_cafe WHERE COALESCE(estado,'en_proceso') <> 'descartado'").all();
+  const lotes = await db.todos("SELECT id, codigo FROM lotes_cafe WHERE COALESCE(estado,'en_proceso') <> 'descartado'");
   for (const l of lotes) {
-    const c = cadenaCostoLote(db, l.id);
+    const c = await cadenaCostoLote(db, l.id);
     if (!c) continue;
     for (const a of c.avisos) {
       if (a.nivel === 'alta' || a.nivel === 'media') add(a.nivel, 'costos', `Lote ${l.codigo}: ${a.texto}`, { lote_cafe_id: l.id });
@@ -25,9 +25,7 @@ function alertasNegocio(db, hoy) {
     // Frescura: el tostado se vende mejor en las primeras semanas.
     const tostado = c.etapas.filter((e) => e.estado.startsWith('tostado') && e.kg_disponible > 0.05);
     if (tostado.length) {
-      const ultimoTueste = db
-        .prepare("SELECT MAX(fecha) AS f FROM procesos_cafe WHERE lote_cafe_id = ? AND estado_salida LIKE 'tostado%'")
-        .get(l.id)?.f;
+      const ultimoTueste = (await db.uno("SELECT MAX(fecha) AS f FROM procesos_cafe WHERE lote_cafe_id = ? AND estado_salida LIKE 'tostado%'", [l.id]))?.f;
       if (ultimoTueste) {
         const dias = diasEntre(ultimoTueste, hoy);
         const kg = tostado.reduce((s, e) => s + e.kg_disponible, 0);
@@ -41,8 +39,8 @@ function alertasNegocio(db, hoy) {
   }
 
   // Precios de lista que no cubren el costo.
-  const inv = inventarioCafe(db);
-  const presentaciones = db.prepare("SELECT * FROM presentaciones WHERE COALESCE(activa,'si') = 'si' AND precio_venta_cop IS NOT NULL").all();
+  const inv = await inventarioCafe(db);
+  const presentaciones = await db.todos("SELECT * FROM presentaciones WHERE COALESCE(activa,'si') = 'si' AND precio_venta_cop IS NOT NULL");
   for (const pres of presentaciones) {
     const estado = inv.estados.find((e) => e.estado === pres.estado_cafe);
     if (!estado?.cop_por_kg) continue;
@@ -65,13 +63,13 @@ function alertasNegocio(db, hoy) {
 
 // Nivel 3 del plan ("alertas"): reglas simples y explicables sobre los datos registrados.
 // No son diagnósticos; indican qué revisar.
-function calcularAlertas(db, fincaId, hoy, lotes) {
+async function calcularAlertas(db, fincaId, hoy, lotes) {
   const alertas = [];
   const add = (nivel, tipo, mensaje, ref) => alertas.push({ nivel, tipo, mensaje, grupo: 'cultivo', ...ref });
 
-  const obs = db.prepare(`
+  const obs = await db.todos(`
     SELECT o.*, l.nombre AS lote FROM observaciones o JOIN lotes l ON l.id = o.lote_id
-    WHERE l.finca_id = ? AND COALESCE(o.estado, 'abierta') != 'resuelta'`).all(fincaId);
+    WHERE l.finca_id = ? AND COALESCE(o.estado, 'abierta') != 'resuelta'`, [fincaId]);
   for (const o of obs) {
     if ((o.severidad ?? 0) >= 4) {
       add('alta', 'observacion', `${o.lote}: ${o.problema ?? o.categoria} con severidad ${o.severidad} sin resolver (desde ${o.fecha}).`, { observacion_id: o.id });
@@ -89,9 +87,9 @@ function calcularAlertas(db, fincaId, hoy, lotes) {
     }
   }
 
-  const floraciones = db.prepare(`
+  const floraciones = await db.todos(`
     SELECT fl.*, l.nombre AS lote FROM floraciones fl JOIN lotes l ON l.id = fl.lote_id
-    WHERE l.finca_id = ? AND (fl.es_principal = 'si' OR fl.intensidad >= 4) AND fl.fecha >= ?`).all(fincaId, sumarDias(hoy, -260));
+    WHERE l.finca_id = ? AND (fl.es_principal = 'si' OR fl.intensidad >= 4) AND fl.fecha >= ?`, [fincaId, sumarDias(hoy, -260)]);
   for (const f of floraciones) {
     const inicio = sumarDias(f.fecha, 210);
     const faltan = diasEntre(hoy, inicio);
@@ -100,14 +98,14 @@ function calcularAlertas(db, fincaId, hoy, lotes) {
     }
   }
 
-  const ultimoClima = db.prepare('SELECT MAX(fecha_hora) AS u FROM clima WHERE finca_id = ?').get(fincaId).u;
+  const ultimoClima = (await db.uno('SELECT MAX(fecha_hora) AS u FROM clima WHERE finca_id = ?', [fincaId])).u;
   if (!ultimoClima || diasEntre(ultimoClima.slice(0, 10), hoy) > 3) {
     add('info', 'clima', ultimoClima ? `Sin datos de clima desde ${ultimoClima.slice(0, 10)}.` : 'No hay datos de clima. Sincronice Open-Meteo o registre lecturas.', {});
   }
 
-  const perecederos = db.prepare(`
+  const perecederos = await db.todos(`
     SELECT id, tipo, fecha, kg_frescos FROM subproductos
-    WHERE estado IN ('disponible','recolectado','almacenado') AND tipo IN ('pulpa','mucilago','borra','aguas_mieles')`).all();
+    WHERE estado IN ('disponible','recolectado','almacenado') AND tipo IN ('pulpa','mucilago','borra','aguas_mieles')`);
   for (const s of perecederos) {
     const vida = SUBPRODUCTOS_INFO[s.tipo].vida_util_fresco_horas;
     if (diasEntre(s.fecha, hoy) * 24 > vida) {
@@ -115,15 +113,15 @@ function calcularAlertas(db, fincaId, hoy, lotes) {
     }
   }
 
-  const vencidas = db.prepare(`
+  const vencidas = await db.todos(`
     SELECT p.id, p.titulo, p.fecha_programada, p.prioridad, l.nombre AS lote FROM plan_labores p JOIN lotes l ON l.id = p.lote_id
-    WHERE l.finca_id = ? AND p.estado = 'pendiente' AND p.fecha_programada < ? ORDER BY p.fecha_programada`).all(fincaId, hoy);
+    WHERE l.finca_id = ? AND p.estado = 'pendiente' AND p.fecha_programada < ? ORDER BY p.fecha_programada`, [fincaId, hoy]);
   for (const t of vencidas) {
     add(t.prioridad === 'alta' ? 'alta' : 'media', 'plan', `${t.lote}: "${t.titulo}" estaba programada para ${t.fecha_programada}.`, { plan_id: t.id });
   }
 
   // Riesgos agroclimáticos del último cálculo guardado (se actualiza cada pocas horas).
-  const cache = leerCache(db, `riesgos:finca:${fincaId}`);
+  const cache = await leerCache(db, `riesgos:finca:${fincaId}`);
   if (cache && Date.now() - Date.parse(cache.obtenido_en) < 12 * 3_600_000) {
     for (const r of cache.datos.riesgos.filter((x) => x.nivel !== 'info' || x.id.startsWith('floracion'))) {
       const nivel = r.nivel === 'alto' ? 'alta' : r.nivel === 'medio' ? 'media' : 'info';
@@ -138,57 +136,56 @@ function calcularAlertas(db, fincaId, hoy, lotes) {
 export function routerResumen(db, config) {
   const r = Router();
 
-  r.get('/', (req, res) => {
+  r.get('/', async (req, res) => {
     const fincaId = Number(req.query.finca_id ?? 1);
-    const finca = db.prepare('SELECT * FROM fincas WHERE id = ?').get(fincaId);
+    const finca = await db.uno('SELECT * FROM fincas WHERE id = ?', [fincaId]);
     if (!finca) throw noEncontrado('Finca');
     const hoy = hoyEn(config.timezone);
 
-    const lotes = db.prepare(`
+    const lotes = (await db.todos(`
       SELECT l.id, l.nombre, l.variedad, l.num_plantas, l.fecha_siembra, l.estado, l.area_ha,
         (SELECT MAX(fecha) FROM actividades a WHERE a.lote_id = l.id) AS ultima_labor,
         (SELECT MAX(fecha) FROM floraciones f WHERE f.lote_id = l.id) AS ultima_floracion,
         (SELECT COUNT(*) FROM observaciones o WHERE o.lote_id = l.id AND COALESCE(o.estado,'abierta') != 'resuelta') AS observaciones_abiertas,
         (SELECT COALESCE(SUM(kg_cereza),0) FROM cosechas c WHERE c.lote_id = l.id) AS kg_cereza_total
-      FROM lotes l WHERE l.finca_id = ? ORDER BY l.id`).all(fincaId)
+      FROM lotes l WHERE l.finca_id = ? ORDER BY l.id`, [fincaId]))
       .map((l) => ({
         ...l,
         edad_meses: l.fecha_siembra ? Math.floor(diasEntre(l.fecha_siembra, hoy) / 30.44) : null,
       }));
 
     const desde30 = sumarDias(hoy, -30);
-    const labores30 = db.prepare(`
+    const labores30 = await db.todos(`
       SELECT a.tipo, COUNT(*) AS cantidad, COALESCE(SUM(a.costo_cop),0) AS costo_cop
       FROM actividades a JOIN lotes l ON l.id = a.lote_id
-      WHERE l.finca_id = ? AND a.fecha >= ? GROUP BY a.tipo ORDER BY cantidad DESC`).all(fincaId, desde30);
+      WHERE l.finca_id = ? AND a.fecha >= ? GROUP BY a.tipo ORDER BY cantidad DESC`, [fincaId, desde30]);
 
-    const clima7 = db.prepare(`
+    const clima7 = await db.uno(`
       SELECT ROUND(SUM(precipitacion_mm),1) AS lluvia_mm, ROUND(AVG(temperatura_c),1) AS temp_media,
              ROUND(MIN(temperatura_c),1) AS temp_min, ROUND(MAX(temperatura_c),1) AS temp_max,
              ROUND(AVG(humedad_rel_pct),0) AS humedad_media, COUNT(*) AS lecturas
       FROM clima WHERE finca_id = ? AND fecha_hora >= ? AND fuente = (
         SELECT fuente FROM clima WHERE finca_id = ? AND fecha_hora >= ?
-        GROUP BY fuente ORDER BY CASE fuente WHEN 'estacion' THEN 0 WHEN 'sensor' THEN 1 WHEN 'manual' THEN 2 ELSE 3 END LIMIT 1)`)
-      .get(fincaId, sumarDias(hoy, -7), fincaId, sumarDias(hoy, -7));
+        GROUP BY fuente ORDER BY CASE fuente WHEN 'estacion' THEN 0 WHEN 'sensor' THEN 1 WHEN 'manual' THEN 2 ELSE 3 END LIMIT 1)`, [fincaId, sumarDias(hoy, -7), fincaId, sumarDias(hoy, -7)]);
 
     const anio = hoy.slice(0, 4);
-    const cosechaAnio = db.prepare(`
+    const cosechaAnio = await db.uno(`
       SELECT COALESCE(SUM(c.kg_cereza),0) AS kg_cereza, COALESCE(SUM(c.kg_pergamino_seco),0) AS kg_pergamino_seco, COUNT(*) AS registros
-      FROM cosechas c JOIN lotes l ON l.id = c.lote_id WHERE l.finca_id = ? AND substr(c.fecha,1,4) = ?`).get(fincaId, anio);
+      FROM cosechas c JOIN lotes l ON l.id = c.lote_id WHERE l.finca_id = ? AND substr(c.fecha,1,4) = ?`, [fincaId, anio]);
 
-    const biomasa = db.prepare(`
+    const biomasa = await db.todos(`
       SELECT tipo, ROUND(SUM(kg_frescos),1) AS kg_frescos, COUNT(*) AS partidas
-      FROM subproductos WHERE estado IN ('disponible','recolectado','almacenado') GROUP BY tipo ORDER BY kg_frescos DESC`).all();
+      FROM subproductos WHERE estado IN ('disponible','recolectado','almacenado') GROUP BY tipo ORDER BY kg_frescos DESC`);
 
-    const conteos = Object.fromEntries(
-      ['plan_labores', 'actividades', 'observaciones', 'floraciones', 'clima', 'suelo', 'vuelos', 'cosechas', 'productores', 'subproductos', 'oportunidades',
-        'lotes_cafe', 'procesos_cafe', 'ventas', 'gastos', 'presentaciones']
-        .map((t) => [t, db.prepare(`SELECT COUNT(*) AS n FROM "${t}"`).get().n]),
-    );
+    const tablasContadas = ['plan_labores', 'actividades', 'observaciones', 'floraciones', 'clima', 'suelo', 'vuelos', 'cosechas',
+      'productores', 'subproductos', 'oportunidades', 'lotes_cafe', 'procesos_cafe', 'ventas', 'gastos', 'presentaciones'];
+    const conteos = Object.fromEntries(await Promise.all(
+      tablasContadas.map(async (t) => [t, Number((await db.uno(`SELECT COUNT(*) AS n FROM "${t}"`)).n)]),
+    ));
 
     const pendientes = [];
     if (finca.altitud_msnm == null) pendientes.push('Confirmar altitud de la finca (m s. n. m.).');
-    const conPlan = new Set(db.prepare("SELECT DISTINCT lote_id FROM plan_labores WHERE estado = 'pendiente'").all().map((x) => x.lote_id));
+    const conPlan = new Set((await db.todos("SELECT DISTINCT lote_id FROM plan_labores WHERE estado = 'pendiente'")).map((x) => x.lote_id));
     for (const l of lotes) {
       if (!conPlan.has(l.id) && l.estado !== 'inactivo') pendientes.push(`${l.nombre}: generar el plan de cultivo.`);
       if (!l.variedad) pendientes.push(`${l.nombre}: registrar variedad(es).`);
@@ -211,10 +208,10 @@ export function routerResumen(db, config) {
       biomasa_disponible: biomasa,
       registros: conteos,
       negocio: {
-        inventario: inventarioCafe(db),
-        anio: estadoResultados(db, { desde: `${anio}-01-01`, hasta: `${anio}-12-31` }),
+        inventario: await inventarioCafe(db),
+        anio: await estadoResultados(db, { desde: `${anio}-01-01`, hasta: `${anio}-12-31` }),
       },
-      alertas: [...calcularAlertas(db, fincaId, hoy, lotes), ...alertasNegocio(db, hoy)],
+      alertas: [...await calcularAlertas(db, fincaId, hoy, lotes), ...await alertasNegocio(db, hoy)],
       datos_pendientes: pendientes,
     });
   });

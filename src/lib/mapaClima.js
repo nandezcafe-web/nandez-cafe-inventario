@@ -88,7 +88,7 @@ export async function obtenerClimaRegional(db, finca, { n = 7, paso = 0.2, horas
   const puntos = [{ latitud: finca.latitud, longitud: finca.longitud }, ...cuadricula];
   const clave = `mapa:${finca.latitud}:${finca.longitud}:${n}:${paso}:${horas}:${lista.join('+')}`;
 
-  const previo = leerCache(db, clave);
+  const previo = await leerCache(db, clave);
   if (previo && Date.now() - Date.parse(previo.obtenido_en) < HORA) return { ...previo.datos, obtenido_en: previo.obtenido_en, desde_cache: true };
 
   const url = new URL('https://api.open-meteo.com/v1/forecast');
@@ -128,6 +128,6 @@ export async function obtenerClimaRegional(db, finca, { n = 7, paso = 0.2, horas
     }),
     aviso: `Modelos con resolución de ~13–28 km: la cuadrícula (cada ${Math.round(paso * 111)} km) muestra el clima de la región, no diferencias entre lotes.`,
   };
-  const obtenido_en = guardarCache(db, clave, datos);
+  const obtenido_en = await guardarCache(db, clave, datos);
   return { ...datos, obtenido_en, desde_cache: false };
 }

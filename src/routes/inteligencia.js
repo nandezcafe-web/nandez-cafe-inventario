@@ -22,15 +22,15 @@ export function routerInteligencia(db) {
 
   // Costo puesto en planta. Si llega productor_id sin distancia, la estima
   // desde la finca (línea recta × factor de ruta).
-  r.post('/logistica/costo', (req, res) => {
+  r.post('/logistica/costo', async (req, res) => {
     const p = { ...(req.body ?? {}) };
     let distanciaEstimada = null;
     if ((p.distancia_km === undefined || p.distancia_km === '') && p.productor_id) {
-      const prod = db.prepare('SELECT latitud, longitud, nombre FROM productores WHERE id = ?').get(Number(p.productor_id));
+      const prod = await db.uno('SELECT latitud, longitud, nombre FROM productores WHERE id = ?', [Number(p.productor_id)]);
       if (!prod) throw noEncontrado('Productor');
       const finca = p.finca_id
-        ? db.prepare('SELECT latitud, longitud FROM fincas WHERE id = ?').get(Number(p.finca_id))
-        : db.prepare('SELECT latitud, longitud FROM fincas ORDER BY id LIMIT 1').get();
+        ? await db.uno('SELECT latitud, longitud FROM fincas WHERE id = ?', [Number(p.finca_id)])
+        : await db.uno('SELECT latitud, longitud FROM fincas ORDER BY id LIMIT 1');
       if (prod.latitud == null || !finca || finca.latitud == null) {
         throw invalido({ distancia_km: 'faltan coordenadas del productor o de la finca; ingrese la distancia' });
       }
@@ -43,7 +43,7 @@ export function routerInteligencia(db) {
   });
 
   // Matriz de oportunidades ordenada por índice. Pesos opcionales: ?peso_demanda=2
-  r.get('/oportunidades-ranking', (req, res) => {
+  r.get('/oportunidades-ranking', async (req, res) => {
     const pesos = {};
     for (const [c] of CRITERIOS_OPORTUNIDAD) {
       const v = req.query[`peso_${c}`];
@@ -53,7 +53,7 @@ export function routerInteligencia(db) {
         pesos[c] = n;
       }
     }
-    const filas = db.prepare("SELECT * FROM oportunidades WHERE estado IS NOT 'descartada'").all();
+    const filas = await db.todos("SELECT * FROM oportunidades WHERE estado IS NOT 'descartada'");
     const ranking = filas
       .map((o) => ({ id: o.id, nombre: o.nombre, subproducto: o.subproducto, linea: o.linea, estado: o.estado, ...indiceOportunidad(o, pesos) }))
       .sort((a, b) => (b.indice ?? -1) - (a.indice ?? -1));
@@ -65,10 +65,10 @@ export function routerInteligencia(db) {
   });
 
   // Inventario regional de biomasa: ¿cuánto hay disponible, de qué y dónde?
-  r.get('/biomasa/inventario', (req, res) => {
+  r.get('/biomasa/inventario', async (req, res) => {
     const estados = String(req.query.estados ?? 'disponible,recolectado,almacenado').split(',');
     const marcas = estados.map(() => '?').join(',');
-    const filas = db.prepare(`
+    const filas = await db.todos(`
       SELECT s.tipo, s.origen, COALESCE(p.nombre, f.nombre) AS fuente,
              COUNT(*) AS partidas, SUM(s.kg_frescos) AS kg_frescos,
              SUM(COALESCE(s.kg_secos, s.kg_frescos * (1 - s.humedad_pct / 100.0))) AS kg_secos_conocidos,
@@ -78,7 +78,7 @@ export function routerInteligencia(db) {
       LEFT JOIN fincas f ON f.id = s.finca_id
       WHERE s.estado IN (${marcas})
       GROUP BY s.tipo, s.origen, fuente
-      ORDER BY s.tipo, kg_frescos DESC`).all(...estados);
+      ORDER BY s.tipo, kg_frescos DESC`, [...estados]);
     res.json({ estados, datos: filas });
   });
 

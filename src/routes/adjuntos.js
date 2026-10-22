@@ -26,7 +26,7 @@ export function routerAdjuntos(db, config) {
   const r = Router();
 
   // multipart/form-data: entidad, entidad_id, descripcion, archivos[] (campo "archivos")
-  r.post('/', subida.array('archivos', 10), (req, res) => {
+  r.post('/', subida.array('archivos', 10), async (req, res) => {
     const archivos = req.files ?? [];
     const borrar = () => archivos.forEach((f) => fs.rmSync(f.path, { force: true }));
     const { entidad, descripcion } = req.body ?? {};
@@ -36,25 +36,26 @@ export function routerAdjuntos(db, config) {
       borrar();
       throw invalido({ entidad: 'recurso inválido' });
     }
-    if (!Number.isInteger(entidadId) || !db.prepare(`SELECT 1 FROM "${entidad}" WHERE id = ?`).get(entidadId)) {
+    if (!Number.isInteger(entidadId) || !await db.uno(`SELECT 1 FROM "${entidad}" WHERE id = ?`, [entidadId])) {
       borrar();
       throw invalido({ entidad_id: 'el registro no existe' });
     }
     if (!archivos.length) throw invalido({ archivos: 'adjunte al menos un archivo (imagen, PDF o CSV, máx. 25 MB)' });
 
-    const stmt = db.prepare(`INSERT INTO adjuntos (entidad, entidad_id, archivo, nombre_original, mime, tamano_bytes, descripcion)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`);
-    const creados = archivos.map((f) => {
-      const info = stmt.run(entidad, entidadId, f.filename, f.originalname, f.mimetype, f.size, descripcion ?? null);
-      return db.prepare('SELECT * FROM adjuntos WHERE id = ?').get(Number(info.lastInsertRowid));
-    });
+    const insertar = `INSERT INTO adjuntos (entidad, entidad_id, archivo, nombre_original, mime, tamano_bytes, descripcion)
+      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`;
+    const creados = [];
+    for (const f of archivos) {
+      const { id } = await db.uno(insertar, [entidad, entidadId, f.filename, f.originalname, f.mimetype, f.size, descripcion ?? null]);
+      creados.push(await db.uno('SELECT * FROM adjuntos WHERE id = ?', [Number(id)]));
+    }
     res.status(201).json({ datos: creados });
   });
 
-  r.delete('/:id', (req, res) => {
-    const adj = db.prepare('SELECT * FROM adjuntos WHERE id = ?').get(Number(req.params.id));
+  r.delete('/:id', async (req, res) => {
+    const adj = await db.uno('SELECT * FROM adjuntos WHERE id = ?', [Number(req.params.id)]);
     if (!adj) throw noEncontrado('Adjunto');
-    db.prepare('DELETE FROM adjuntos WHERE id = ?').run(adj.id);
+    await db.ejecutar('DELETE FROM adjuntos WHERE id = ?', [adj.id]);
     fs.rmSync(path.join(config.uploadsDir, path.basename(adj.archivo)), { force: true });
     res.status(204).end();
   });

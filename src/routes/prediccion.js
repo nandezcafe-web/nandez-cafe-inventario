@@ -14,7 +14,7 @@ export function routerPrediccion(db, config) {
 
   // ¿Qué suele pasar en la ubicación mes a mes? + lo que viene en los próximos 3 meses.
   r.get('/climatologia', async (req, res) => {
-    const finca = db.prepare('SELECT * FROM fincas WHERE id = ?').get(Number(req.query.finca_id ?? 1));
+    const finca = await db.uno('SELECT * FROM fincas WHERE id = ?', [Number(req.query.finca_id ?? 1)]);
     if (!finca) throw noEncontrado('Finca');
     const clima = await obtenerClimatologia(db, finca, { fetchImpl });
     const mesActual = Number(hoyEn(config.timezone).slice(5, 7));

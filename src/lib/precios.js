@@ -152,10 +152,10 @@ export function sugerirPrecio(p = {}) {
 
 // Precios sugeridos para todas las presentaciones activas, con el costo real
 // del lote indicado.
-export function preciosDeLote(db, { cadena, gastos_generales_cop_kg = 0, iva_pct = 0, redondeo_cop = 500 }) {
-  const presentaciones = db
-    .prepare("SELECT * FROM presentaciones WHERE COALESCE(activa,'si') = 'si' ORDER BY estado_cafe, gramos")
-    .all();
+export async function preciosDeLote(db, { cadena, gastos_generales_cop_kg = 0, iva_pct = 0, redondeo_cop = 500 }) {
+  const presentaciones = await db.todos(
+    "SELECT * FROM presentaciones WHERE COALESCE(activa,'si') = 'si' ORDER BY estado_cafe, gramos",
+  );
 
   return presentaciones.map((pres) => {
     const etapa = cadena.etapas.find((e) => e.estado === pres.estado_cafe);

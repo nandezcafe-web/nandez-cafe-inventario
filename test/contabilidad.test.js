@@ -27,16 +27,16 @@ const pedir = async (ruta, { metodo = 'GET', cuerpo } = {}) => {
 
 before(async () => {
   uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cafe-cont-'));
-  db = abrirDb(':memory:');
-  sembrarSiVacia(db);
+  db = await abrirDb(':memory:');
+  await sembrarSiVacia(db);
   const app = crearApp(db, { apiToken: null, timezone: 'America/Bogota', uploadsDir, publicDir: path.resolve('public') });
   await new Promise((ok) => { servidor = app.listen(0, '127.0.0.1', ok); });
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
 
-after(() => {
+after(async () => {
   servidor.close();
-  db.close();
+  await db.cerrar();
   fs.rmSync(uploadsDir, { recursive: true, force: true });
 });
 
@@ -471,14 +471,14 @@ test('respaldo: entrega una copia consistente y legible de la base', async () =>
   fs.writeFileSync(archivo, Buffer.from(await resp.arrayBuffer()));
   assert.equal(fs.readFileSync(archivo).subarray(0, 15).toString(), 'SQLite format 3');
 
-  const copia = abrirDb(archivo);
-  const lote = copia.prepare('SELECT codigo, kg_inicial FROM lotes_cafe WHERE codigo = ?').get('DT-2026-01');
+  const copia = await abrirDb(archivo);
+  const lote = await copia.uno('SELECT codigo, kg_inicial FROM lotes_cafe WHERE codigo = ?', ['DT-2026-01']);
   assert.equal(lote.kg_inicial, 51);
-  const procesos = copia.prepare('SELECT COUNT(*) AS n FROM procesos_cafe WHERE lote_cafe_id = 1').get().n;
+  const procesos = Number((await copia.uno('SELECT COUNT(*) AS n FROM procesos_cafe WHERE lote_cafe_id = 1')).n);
   assert.equal(procesos, 2, 'la copia trae la trilla y el tueste');
-  const ventas = copia.prepare('SELECT COUNT(*) AS n FROM ventas').get().n;
+  const ventas = Number((await copia.uno('SELECT COUNT(*) AS n FROM ventas')).n);
   assert.equal(ventas, 1);
-  copia.close();
+  await copia.cerrar();
 });
 
 test('respaldo: exige la clave de acceso', async () => {
