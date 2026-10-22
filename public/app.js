@@ -180,7 +180,7 @@ function pintarNav(actual) {
     const n = indicadores[a.id] ?? 0;
     const punto = n ? `<span class="punto ${a.id === 'campo' ? 'media' : ''}" aria-label="${n} para revisar">${n > 9 ? '9+' : n}</span>` : '';
     return `<a href="#/${ultimaSeccion[a.id] ?? a.inicio}" ${a === activa ? 'aria-current="page"' : ''}>
-      <span class="ico">${icono(a.id)}${punto}</span><span class="txt">${esc(a.etiqueta)}</span></a>`;
+      <span class="ico">${icono(a.id)}</span><span class="txt">${esc(a.etiqueta)}</span>${punto}</a>`;
   };
   const mas = `<button type="button" class="pestana-mas" data-registrar aria-label="Registrar algo">
     <span class="ico">${icono('mas')}</span><span class="txt">Registrar</span></button>`;
@@ -328,7 +328,11 @@ function filaLista(f) {
   </${etiqueta}>`;
 }
 
-const widget = (valor, etiqueta) => `<div class="widget"><b>${valor}</b><span>${esc(etiqueta)}</span></div>`;
+// Widget: una cifra grande y qué es. Sin dato, dice cuándo lo habrá en vez de un guion.
+const widget = (valor, etiqueta, { sinDato = '' } = {}) => `<div class="widget">${valor == null
+  ? `<b class="vacio-cifra">${esc(sinDato || 'Sin datos todavía')}</b>`
+  : `<b>${valor}</b>`}<span>${esc(etiqueta)}</span></div>`;
+const kg = (n) => `${fmt(n, 1)}<small> kg</small>`;
 
 const fechaLarga = () => new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -352,10 +356,10 @@ function caminoDelCafe(inv) {
     .map((e) => [e.estado, e.estado === 'cereza' ? 'Cereza' : 'Húmedo']);
   const pasos = [...antes, ...CAMINO];
   return `<div class="camino" role="list">${pasos.map(([id, nombre], i) => {
-    const kg = kgDe(id);
+    const cantidad = kgDe(id);
     return `${i ? '<span class="camino-flecha" aria-hidden="true">›</span>' : ''}
-      <div class="camino-paso ${kg > 0.01 ? 'lleno' : ''}" role="listitem">
-        <b>${kg > 0.01 ? fmt(kg, kg < 10 ? 1 : 0) : '0'}</b><span>kg</span><em>${esc(nombre)}</em>
+      <div class="camino-paso ${cantidad > 0.01 ? 'lleno' : ''}" role="listitem">
+        <b>${fmt(cantidad > 0.01 ? cantidad : 0, 1)}<small> kg</small></b><em>${esc(nombre)}</em>
       </div>`;
   }).join('')}</div>`;
 }
@@ -392,8 +396,8 @@ async function vistaResumen() {
     </section>
 
     <div class="widgets">
-      ${widget(`${fmt(inv.total_kg, 1)} kg`, 'en inventario')}
-      ${widget(tostado ? `$${fmt(tostado.cop_por_kg)}` : '—', 'cuesta el kg tostado')}
+      ${widget(kg(inv.total_kg), 'en inventario')}
+      ${widget(tostado ? `$${fmt(tostado.cop_por_kg)}` : null, 'cuesta el kg tostado', { sinDato: 'Se sabe al tostar' })}
       ${widget(`$${fmt(inv.total_valor_cop)}`, 'inventario al costo')}
       ${widget(`<span class="${neg.utilidad_operativa_cop < 0 ? 'negativo' : ''}">$${fmt(neg.utilidad_operativa_cop)}</span>`, `utilidad ${r.cosecha_anio.anio}`)}
     </div>
@@ -441,9 +445,9 @@ async function vistaCampo() {
 
     <div class="widgets">
       ${widget(fmt(r.totales.plantas), `plantas en ${r.totales.lotes} lotes`)}
-      ${widget(c7 ? `${fmt(c7.lluvia_mm, 0)} mm` : '—', 'lluvia en 7 días')}
-      ${widget(c7 ? `${fmt(c7.temp_media, 1)} °C` : '—', 'temperatura media')}
-      ${widget(`${fmt(r.cosecha_anio.kg_cereza)} kg`, `cereza ${r.cosecha_anio.anio}`)}
+      ${widget(c7 ? `${fmt(c7.lluvia_mm, 0)}<small> mm</small>` : null, 'lluvia en 7 días', { sinDato: 'Sin clima' })}
+      ${widget(c7 ? `${fmt(c7.temp_media, 1)}<small> °C</small>` : null, 'temperatura media', { sinDato: 'Sin clima' })}
+      ${widget(kg(r.cosecha_anio.kg_cereza), `cereza ${r.cosecha_anio.anio}`)}
     </div>
 
     ${lista('Alertas', alertas.slice(0, 3).map(filaAlerta))}
