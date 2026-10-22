@@ -62,7 +62,7 @@ function pantallaAcceso(aviso = '') {
   $('#subnav').innerHTML = '';
   vista.innerHTML = `
     <h1>Clave de acceso</h1>
-    <p class="suave">Este servidor pide una clave. Está en el archivo <code>.env</code> del computador, en la línea <code>API_TOKEN=</code>. Se pide una sola vez en cada celular o computador.</p>
+    <p class="suave">Cada persona tiene su propia clave, y con ella queda marcado quién registró cada cosa. Viene en el enlace personal que le mandó Maick; si no lo tiene, pídaselo. Se pide una sola vez en cada celular o computador.</p>
     ${aviso ? `<div class="alerta alta">${esc(aviso)}</div>` : ''}
     <form class="tarjeta" id="f-acceso">
       <label for="ac-token">Clave</label>
@@ -81,7 +81,7 @@ function pantallaAcceso(aviso = '') {
       await arrancar();
     } catch (e) {
       try { localStorage.removeItem('cafe_token'); } catch { /* sin almacenamiento */ }
-      pantallaAcceso(e.auth ? 'Esa clave no es la correcta. Revísela en el archivo .env del computador.' : e.message);
+      pantallaAcceso(e.auth ? 'Esa clave no es la correcta. Pegue la que viene en su enlace personal, completa.' : e.message);
     }
   });
   $('#ac-token').focus();
