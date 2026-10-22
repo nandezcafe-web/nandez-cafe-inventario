@@ -174,7 +174,9 @@ function pintarNav(actual) {
   // (adjuntos, una dirección mal escrita), el botón del área seguiría
   // apuntando a esa página y "Hoy" dejaría de llevar al inicio.
   if (area) ultimaSeccion[area.id] = actual;
-  const activa = area ?? AREAS[0];
+  // Una dirección que no es de ninguna pestaña (adjuntos, una mal escrita) no
+  // marca ninguna: marcar Hoy haría creer que se está en el inicio.
+  const activa = area;
 
   const pestana = (a) => {
     const n = indicadores[a.id] ?? 0;
@@ -192,7 +194,7 @@ function pintarNav(actual) {
   // Debajo del título: el control segmentado del área, o "‹ Volver" en una
   // sección que no tiene segmento propio.
   const sub = $('#subnav');
-  const enSegmento = activa.secciones.some(([s]) => s === actual);
+  const enSegmento = Boolean(activa?.secciones.some(([s]) => s === actual));
   if (enSegmento) {
     sub.innerHTML = `<div class="segmentado-ios" role="tablist">${activa.secciones
       .map(([id, et]) => `<a role="tab" href="#/${id}" ${id === actual ? 'aria-selected="true"' : ''}>${esc(et)}</a>`).join('')}</div>`;
@@ -257,14 +259,18 @@ async function refrescarIndicadores(resumen) {
       hoy: r.alertas.filter((a) => a.grupo === 'cafe' && a.nivel !== 'info').length,
       campo: r.alertas.filter((a) => a.grupo !== 'cafe' && a.nivel === 'alta').length,
     };
-    const [, id = 'resumen'] = location.hash.split('/');
-    pintarNav(id);
+    pintarNav(rutaActual());
   } catch { /* sin conexión o sin token: el menú va sin indicadores */ }
 }
 
+// La sección que pide la dirección. #/cultivo es la dirección vieja de Campo.
+function rutaActual() {
+  const [, id = 'resumen'] = location.hash.split('/');
+  return id === 'cultivo' ? 'campo' : id;
+}
+
 async function enrutar() {
-  let [, id = 'resumen'] = location.hash.split('/');
-  if (id === 'cultivo') id = 'campo'; // dirección vieja
+  const id = rutaActual();
   pintarNav(id);
   vista.innerHTML = '<p class="cargando" aria-label="Cargando"><span></span><span></span><span></span></p>';
   try {
@@ -333,6 +339,8 @@ const widget = (valor, etiqueta, { sinDato = '' } = {}) => `<div class="widget">
   ? `<b class="vacio-cifra">${esc(sinDato || 'Sin datos todavía')}</b>`
   : `<b>${valor}</b>`}<span>${esc(etiqueta)}</span></div>`;
 const kg = (n) => `${fmt(n, 1)}<small> kg</small>`;
+// Plata con el signo antes del peso, como se escribe a mano: −$62.072.
+const pesos = (n) => (n == null ? '—' : `${n < 0 ? '−' : ''}$${fmt(Math.abs(n))}`);
 
 const fechaLarga = () => new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -399,16 +407,16 @@ async function vistaResumen() {
       ${widget(kg(inv.total_kg), 'en inventario')}
       ${widget(tostado ? `$${fmt(tostado.cop_por_kg)}` : null, 'cuesta el kg tostado', { sinDato: 'Se sabe al tostar' })}
       ${widget(`$${fmt(inv.total_valor_cop)}`, 'inventario al costo')}
-      ${widget(`<span class="${neg.utilidad_operativa_cop < 0 ? 'negativo' : ''}">$${fmt(neg.utilidad_operativa_cop)}</span>`, `utilidad ${r.cosecha_anio.anio}`)}
+      ${widget(`<span class="${neg.utilidad_operativa_cop < 0 ? 'negativo' : ''}">${pesos(neg.utilidad_operativa_cop)}</span>`, `utilidad ${r.cosecha_anio.anio}`)}
     </div>
 
     ${lista('Pendientes del café', alertasCafe.map((a) => ({ titulo: esc(a.mensaje), punto: nivel[a.nivel] ?? 'azul' })))}
     ${alertasCafe.length ? '' : lista('Pendientes del café', [{ titulo: 'Nada por revisar', detalle: 'El café está al día.', punto: 'verde' }])}
 
     ${lista(`Negocio ${r.cosecha_anio.anio}`, [
-    { titulo: 'Ingresos', valor: `$${fmt(neg.ingresos_cop)}`, href: '#/ventas' },
-    { titulo: 'Margen bruto', valor: `$${fmt(neg.margen_bruto_cop)}${neg.margen_bruto_pct != null ? ` · ${fmt(neg.margen_bruto_pct, 0)} %` : ''}`, href: '#/pyg' },
-    { titulo: 'Gastos', valor: `$${fmt(neg.gastos_operativos_cop)}`, href: '#/gastos' },
+    { titulo: 'Ingresos', valor: pesos(neg.ingresos_cop), href: '#/ventas' },
+    { titulo: 'Margen bruto', valor: `${pesos(neg.margen_bruto_cop)}${neg.margen_bruto_pct != null ? ` · ${fmt(neg.margen_bruto_pct, 0)} %` : ''}`, href: '#/pyg' },
+    { titulo: 'Gastos', valor: pesos(neg.gastos_operativos_cop), href: '#/gastos' },
     { titulo: 'Café comprado', valor: `${fmt(neg.compras.kg, 1)} kg · $${fmt(neg.compras.valor_cop)}`, href: '#/lotes_cafe' },
     ...(neg.por_cobrar.valor_cop ? [{ titulo: 'Por cobrar', valor: `$${fmt(neg.por_cobrar.valor_cop)}`, detalle: `${neg.por_cobrar.ventas} venta(s)`, href: '#/ventas', punto: 'ambar' }] : []),
   ])}
@@ -778,11 +786,15 @@ async function abrirFormulario(recurso, id, alGuardar, valoresIniciales = {}) {
       avisar(id ? '✓ Cambios guardados' : (usuario ? `✓ Guardado a nombre de ${usuario.split(' ')[0]}` : '✓ Guardado'));
       alGuardar?.();
     } catch (e) {
-      $('[data-error="_general"]', formDialogo).textContent = e.message;
-      for (const [campo, msg] of Object.entries(e.detalles ?? {})) {
+      // Con errores por campo, el mensaje general solo orienta; cada campo dice
+      // qué le falta. El primero con error queda a la vista.
+      const detalles = Object.entries(e.detalles ?? {});
+      $('[data-error="_general"]', formDialogo).textContent = detalles.length ? 'Revise los campos marcados en rojo.' : e.message;
+      for (const [campo, msg] of detalles) {
         const el = $(`[data-error="${campo}"]`, formDialogo);
-        if (el) el.textContent = msg;
+        if (el) el.textContent = msg === 'es obligatorio' ? 'Falta este dato' : msg;
       }
+      formDialogo.querySelector('.error-campo:not(:empty)')?.closest('div')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       boton.disabled = false;
     }
   };

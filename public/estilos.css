@@ -174,7 +174,7 @@ body:has(main .mapa-rejilla) #subnav, body:has(main .tabla-contenedor table) #su
 .segmentado-ios [aria-selected="true"], .segmentado-ios [aria-pressed="true"] { background: var(--superficie); font-weight: 600; box-shadow: var(--sombra-1); }
 @media (prefers-color-scheme: dark) { .segmentado-ios [aria-selected="true"], .segmentado-ios [aria-pressed="true"] { background: #636366; } }
 .segmentado-ios.mini { max-width: 180px; }
-.segmentado-ios.mini button { min-height: 28px; font-size: var(--t-nota); }
+.segmentado-ios.mini button { min-height: 32px; font-size: var(--t-nota); }
 
 /* ---------- Tarjetas, cifras y widgets ---------- */
 .tarjeta { background: var(--superficie); border-radius: var(--r-medio); padding: var(--e-4); min-width: 0; margin-bottom: var(--e-3); }
@@ -190,7 +190,9 @@ body:has(main .mapa-rejilla) #subnav, body:has(main .tabla-contenedor table) #su
 @media (min-width: 640px) { .widgets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .cifras { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .widget, .cifra { display: flex; flex-direction: column; justify-content: space-between; gap: var(--e-1); background: var(--superficie); border-radius: var(--r-medio); padding: 14px; min-width: 0; min-height: 86px; }
-.widget b, .cifra b { display: block; font-size: var(--t-cifra); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* La cifra nunca se parte en dos líneas: en un celular angosto se achica. */
+.widget b, .cifra b { display: block; font-size: clamp(18px, 5.6vw, var(--t-cifra)); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cifra b { white-space: normal; }
 .widget b small { font-size: var(--t-sub); font-weight: 600; color: var(--suave); letter-spacing: 0; }
 .widget b.vacio-cifra { font-size: var(--t-sub); font-weight: 500; color: var(--suave); letter-spacing: 0; line-height: 1.3; }
 .widget span, .cifra span { color: var(--suave); font-size: var(--t-nota); }
@@ -206,7 +208,12 @@ body:has(main .mapa-rejilla) #subnav, body:has(main .tabla-contenedor table) #su
 .camino-paso em { display: block; font-style: normal; font-size: var(--t-nota); font-weight: 600; margin-top: 2px; }
 .camino-paso.lleno { background: var(--tinte); color: var(--marca); box-shadow: inset 0 0 0 1.5px var(--marca); }
 .camino-flecha { color: var(--tenue); font-size: 18px; flex: none; }
-@media (max-width: 380px) { .camino-paso b { font-size: var(--t-cuerpo); } }
+@media (max-width: 380px) {
+  .camino { gap: 6px; }
+  .camino-flecha { display: none; }
+  .camino-paso b { font-size: var(--t-cuerpo); }
+  .camino-paso em { font-size: var(--t-mini); }
+}
 
 /* ---------- Listas agrupadas (como Ajustes del iPhone) ---------- */
 .lista-titulo { margin: var(--e-6) var(--e-4) 6px; font-size: var(--t-nota); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }

@@ -6,8 +6,9 @@ description: Cómo levantar Nández Café y conducir el panel para verificar un 
 # Verificar Nández Café
 
 Superficie: **GUI** (el panel web). La API es la superficie secundaria y se
-conduce con `curl`. No hay repositorio git en esta carpeta: el alcance es lo que
-el usuario nombre o los archivos que se hayan tocado.
+conduce con `curl`. Es un repositorio git (rama `main`, se publica sola en
+Vercel al empujar): el alcance es el rango de commits que se nombre, o
+`git diff HEAD` si hay cambios sin guardar.
 
 ## Levantar
 
@@ -86,16 +87,24 @@ document.querySelector('#vista h1').innerText;
 
 Puntos que conviene revisar en cualquier cambio de navegación o de panel:
 
-- **Los dos niveles del menú:** `#nav` (áreas) y `#subnav` (secciones del área).
-  El área activa lleva `aria-current="true"`, la sección `aria-current="page"`.
+- **Pestañas y segmentos:** `#pestanas` (celular) y `#nav` (computador) se
+  pintan igual; la pestaña activa lleva `aria-current="page"`. En Café y Dinero
+  `#subnav` es un `.segmentado-ios` con `aria-selected="true"`; en las demás
+  secciones es `‹ Volver`. Contar filas con `#vista .lista .fila`: la hoja del
+  botón + (`#hoja`) también tiene `.fila` y queda en el DOM después de cerrarse.
 - **Memoria del área:** entrar a una sección, cambiar de área y volver — debe
   regresar a donde estaba (`ultimaSeccion` en `public/app.js`).
-- **Direcciones fuera del mapa** (`#/adjuntos`, `#/noexiste`): ninguna área debe
-  quedar marcada y el botón **Hoy** debe seguir apuntando a `#/resumen`.
-- **Ancho de celular:** emular 320 y 375 px. `#nav` no debe desbordarse
-  (`nav.scrollWidth > nav.getBoundingClientRect().width`) y la página no debe
-  tener desplazamiento horizontal.
-- **Objetivos de toque:** 44 px en las áreas, 40 px en las secciones.
+- **Direcciones fuera del mapa** (`#/adjuntos`, `#/noexiste`): ninguna pestaña
+  debe quedar marcada y **Hoy** debe seguir apuntando a `#/resumen`. `#/cultivo`
+  es la dirección vieja de Campo: debe mostrar Campo y marcar Campo, también
+  después de que `refrescarIndicadores` repinte (usa `rutaActual()`).
+- **Ancho de celular:** emular 320 y 390 px. La página no debe tener
+  desplazamiento horizontal, las cifras de los widgets no deben partirse en dos
+  líneas (`b.scrollWidth > b.clientWidth`) y los nombres del camino del café
+  deben caber en su caja. A 320 px es donde se rompe primero.
+- **Objetivos de toque:** 44 px en pestañas y botones; 32 px el segmentado mini.
+- **Captura de pantalla con la ventana escondida:** a veces sale el contenido
+  repetido en mosaico. Es la captura, no el diseño: confirmar con medidas.
 - **Modo oscuro:** emularlo; todo el color sale de variables en `:root`.
 
 ## Postgres y Vercel sin tocar Supabase
