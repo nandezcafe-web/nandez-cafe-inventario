@@ -234,3 +234,6 @@ details.alerta summary { cursor: pointer; }
 .fila-check { display: flex; align-items: center; gap: 8px; }
 .fila-check input { width: auto; margin: 0; }
 .fila-check label { margin: 0; color: var(--texto); font-size: 14px; }
+
+/* Cifras en rojo: pérdidas en venta de equipos */
+.negativo { color: var(--alta); }

@@ -2,6 +2,23 @@ import path from 'node:path';
 
 const raiz = path.resolve(import.meta.dirname, '..');
 
+// "Nombre:clave,Otro:clave" → [{ nombre, token }]. Se ignora lo que esté mal
+// formado en vez de tumbar el arranque: una clave de menos deja a alguien sin
+// entrar, pero una excepción deja a los dos sin sistema.
+function parsearUsuarios(valor) {
+  if (!valor) return [];
+  return valor
+    .split(',')
+    .map((par) => {
+      const corte = par.indexOf(':');
+      if (corte <= 0) return null;
+      const nombre = par.slice(0, corte).trim();
+      const token = par.slice(corte + 1).trim();
+      return nombre && token ? { nombre, token } : null;
+    })
+    .filter(Boolean);
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   host: process.env.HOST ?? '127.0.0.1',
@@ -10,6 +27,9 @@ export const config = {
     : path.resolve(raiz, process.env.DB_PATH ?? 'data/cafe.db'),
   uploadsDir: path.resolve(raiz, process.env.UPLOADS_DIR ?? 'data/uploads'),
   apiToken: process.env.API_TOKEN || null,
+  // USUARIOS=Maick:clave1,Jhon:clave2 — una clave por persona, para saber quién
+  // registró cada cosa. Conviven con API_TOKEN, que queda como clave compartida.
+  usuarios: parsearUsuarios(process.env.USUARIOS),
   timezone: process.env.TIMEZONE ?? 'America/Bogota',
   // Cada cuántas horas se sincroniza el clima y se recalculan los riesgos (0 = desactivado).
   climaAutoHoras: Number(process.env.CLIMA_AUTO_HORAS ?? 3),

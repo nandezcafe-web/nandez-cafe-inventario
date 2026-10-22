@@ -12,6 +12,7 @@ const fmt = (n, dec = 0) => (n == null ? '—' : Number(n).toLocaleString('es-CO
 const hoy = () => new Date().toLocaleDateString('sv-SE');
 
 let esquema = null;
+let usuario = null; // nombre de quien entró, si usa clave propia
 const cacheEtiquetas = {};
 
 function avisar(msg) {
@@ -191,7 +192,7 @@ async function enrutar() {
     else if (id === 'ranking') await vistaRanking();
     else if (['registrar', 'inventario', 'costos', 'precios', 'pyg'].includes(id)) {
       await (await import('./contabilidad.js')).vistaContabilidad(id, {
-        vista, api, esc, fmt, titulo, hoy, avisar, abrirFormulario,
+        vista, api, esc, fmt, titulo, hoy, avisar, abrirFormulario, usuario,
       });
     }
     else if (esquema.recursos[id]) await vistaRecurso(id);
@@ -264,7 +265,7 @@ async function vistaResumen() {
   const porProcesar = inv.estados.find((e) => SIGUIENTE_PASO[e.estado] && e.kg > 0.01);
 
   vista.innerHTML = `
-    <h1>Nández Café <span class="suave pequeno">${esc(r.hoy)}</span></h1>
+    <h1>Nández Café <span class="suave pequeno">${usuario ? `${esc(usuario)} · ` : ''}${esc(r.hoy)}</span></h1>
     <div class="acciones">
       <a class="accion" href="#/registrar"><b>Registrar proceso</b><span>Trilla, tueste, molienda</span></a>
       <button type="button" class="accion" data-nuevo="ventas"><b>Anotar una venta</b><span>Bolsas o kg que salieron</span></button>
@@ -505,7 +506,11 @@ async function abrirFormulario(recurso, id, alGuardar, valoresIniciales = {}) {
     }
   }
 
-  const controles = await Promise.all(Object.entries(rec.campos).map(([n, d]) => controlCampo(n, d, inicial[n])));
+  // Los campos automáticos (quién registró) los pone el servidor: no se muestran
+  // para que nadie los escriba a mano ni crea que puede cambiarlos.
+  const controles = await Promise.all(
+    Object.entries(rec.campos).filter(([, d]) => !d.auto).map(([n, d]) => controlCampo(n, d, inicial[n])),
+  );
   const soloLectura = rec.soloLectura;
 
   let adjuntosHtml = '';
@@ -927,6 +932,7 @@ if (tokenEnlace) {
 
 async function arrancar() {
   esquema = await api('/esquema');
+  usuario = (await api('/yo').catch(() => null))?.usuario ?? null;
   await enrutar();
   refrescarIndicadores();
 }

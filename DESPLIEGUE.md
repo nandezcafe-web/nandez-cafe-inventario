@@ -68,6 +68,24 @@ Render generó una clave sola. Para verla:
 Es **distinta** de la que usa en su computador, y así debe ser: si alguna vez
 hay que cambiar la de internet, la local no se toca.
 
+### Y las claves de cada uno
+
+En la misma pestaña **Environment** hay una variable `USUARIOS`, vacía. Ahí va
+una clave por persona, para que cada registro quede con nombre:
+
+```
+Maick:CLAVE_SUYA,Hermano:CLAVE_DE_EL
+```
+
+Sin espacios alrededor de la coma, y cambie `Hermano` por el nombre real: ese es
+el nombre que va a quedar en los registros. Las claves las puede sacar del
+archivo `.env` de su computador, donde ya hay dos generadas, o inventar otras
+largas. Guarde y Render reinicia el servicio solo.
+
+Cada uno entra con **su** clave, no con la compartida. Cuando confirme que los
+dos entran bien, **borre `API_TOKEN`** del panel: así ningún registro queda sin
+nombre.
+
 ## 4. Entrar desde los celulares
 
 1. Abra `https://nandez-cafe.onrender.com` en el celular.
@@ -113,9 +131,10 @@ una vez antes de necesitarlo.
 Lo que falta para no depender de acordarse: una tarea programada que baje la
 copia sola. Pendiente.
 
-**Una clave por persona.** Hoy la clave es compartida, así que el sistema no
-distingue quién registró qué. Mientras tanto, llenen el campo **Responsable** en
-los procesos y **Cliente** en las ventas.
+**Una clave por persona: ya está.** Cada lote, proceso, venta y gasto queda
+marcado con el nombre de quien lo registró, según la clave con la que entró. Se
+ve en las listas de Procesos y de Ventas, en la columna *Registrado por*. No se
+puede cambiar después ni escribir a mano. Falta configurarlo en Render (arriba).
 
 ## Si algo sale mal
 

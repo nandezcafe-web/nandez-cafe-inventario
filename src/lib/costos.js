@@ -355,6 +355,9 @@ export function estadoResultados(db, { desde, hasta } = {}) {
   const amortizacion = amortizacionPeriodo(db, { desde, hasta });
   const margenBruto = ingresos - costoVendido;
   const utilidad = margenBruto - gastosOperativos - amortizacion.cop;
+  // Vender un equipo no es operación del café: va después de la utilidad
+  // operativa. Es ganancia si se recibió más de lo que quedaba en libros.
+  const resultadoPeriodo = utilidad + amortizacion.resultado_ventas_cop;
 
   const compras = db.prepare(`
     SELECT COUNT(*) AS lotes,
@@ -386,6 +389,8 @@ export function estadoResultados(db, { desde, hasta } = {}) {
     depreciacion_cop: amortizacion.cop,
     amortizacion: amortizacion,
     utilidad_operativa_cop: r0(utilidad),
+    resultado_venta_equipos_cop: amortizacion.resultado_ventas_cop,
+    resultado_periodo_cop: r0(resultadoPeriodo),
     margen_neto_pct: ingresos > 0 ? r2((utilidad / ingresos) * 100) : null,
     kg_vendidos: r2(kgVendidos),
     cop_por_kg_vendido: kgVendidos > 0 ? r2(ingresos / kgVendidos) : null,
@@ -405,7 +410,7 @@ export function estadoResultados(db, { desde, hasta } = {}) {
     por_cobrar: { ventas: porCobrar.ventas ?? 0, valor_cop: r0(porCobrar.valor_cop ?? 0) },
     inventario_valor_cop: inventarioCafe(db).total_valor_cop,
     avisos,
-    aviso: 'La utilidad descuenta la depreciación de las inversiones que tengan vida útil (campo "amortizar meses"); las que no la tengan no cargan nada. No descuenta su propio tiempo si no está registrado como gasto de mano de obra.',
+    aviso: 'La utilidad operativa descuenta la depreciación de las inversiones que tengan vida útil (campo "amortizar meses"); las que no la tengan no cargan nada. La venta de un equipo va aparte, después de la utilidad operativa. No se descuenta su propio tiempo si no está registrado como gasto de mano de obra.',
   };
 }
 
@@ -429,9 +434,13 @@ const mesIndice = (fecha) => {
 // Sin `desde` se cobra lo corrido desde la compra; sin `hasta`, hasta hoy.
 // Nunca se cobra más allá de la vida útil: pasados los meses, la inversión
 // deja de cargar costo.
+const mesTexto = (indice) => `${String(Math.floor(indice / 12)).padStart(4, '0')}-${String((indice % 12) + 1).padStart(2, '0')}`;
+
 export function amortizacionPeriodo(db, { desde, hasta, hoy } = {}) {
   const filas = db
-    .prepare("SELECT id, fecha, descripcion, categoria, valor_cop, amortizar_meses FROM gastos WHERE tipo_costo = 'inversion'")
+    .prepare(`SELECT id, fecha, descripcion, categoria, valor_cop, amortizar_meses,
+                     valor_residual_cop, fecha_venta, valor_venta_cop
+              FROM gastos WHERE tipo_costo = 'inversion'`)
     .all();
 
   const hoyMes = mesIndice(hoy ?? new Date().toISOString().slice(0, 10));
@@ -440,40 +449,93 @@ export function amortizacionPeriodo(db, { desde, hasta, hoy } = {}) {
 
   let total = 0;
   let cuotaMensual = 0;
+  let resultadoVentas = 0;
   const detalle = [];
+  const ventas = [];
   const sinVidaUtil = [];
+  const avisos = [];
 
   for (const g of filas) {
-    if (!g.amortizar_meses || g.amortizar_meses < 1 || !g.valor_cop) {
-      if (g.valor_cop) sinVidaUtil.push({ id: g.id, descripcion: g.descripcion, valor_cop: r0(g.valor_cop) });
-      continue;
-    }
+    const valor = g.valor_cop ?? 0;
+    if (!valor) continue;
+
     const inicio = mesIndice(g.fecha);
-    const ultimo = inicio + g.amortizar_meses - 1;
-    const primeroCobrado = Math.max(inicio, desdeMes ?? inicio);
-    const ultimoCobrado = Math.min(hastaMes, ultimo);
-    const meses = Math.max(0, ultimoCobrado - primeroCobrado + 1);
-    const cuota = g.valor_cop / g.amortizar_meses;
-    cuotaMensual += ultimoCobrado >= primeroCobrado ? cuota : 0;
-    if (!meses) continue;
-    total += cuota * meses;
-    detalle.push({
-      id: g.id,
-      descripcion: g.descripcion,
-      valor_cop: r0(g.valor_cop),
-      amortizar_meses: g.amortizar_meses,
-      cuota_mensual_cop: r0(cuota),
-      meses_cobrados: meses,
-      cop: r0(cuota * meses),
-      termina: `${String(Math.floor(ultimo / 12)).padStart(4, '0')}-${String((ultimo % 12) + 1).padStart(2, '0')}`,
-    });
+    const mesVenta = g.fecha_venta ? mesIndice(g.fecha_venta) : null;
+    // El residual es lo que se espera que valga al final: no se amortiza.
+    const residual = Math.min(g.valor_residual_cop ?? 0, valor);
+    const base = valor - residual;
+    const amortizable = g.amortizar_meses >= 1 && base > 0;
+
+    if (!amortizable) {
+      sinVidaUtil.push({ id: g.id, descripcion: g.descripcion, valor_cop: r0(valor) });
+      if (residual >= valor && g.amortizar_meses >= 1) {
+        avisos.push(`"${g.descripcion ?? `gasto #${g.id}`}": el valor residual ($${r0(g.valor_residual_cop).toLocaleString('es-CO')}) es igual o mayor que lo que costó ($${r0(valor).toLocaleString('es-CO')}), así que no amortiza nada. El residual debe ser menor que el valor.`);
+      }
+    }
+
+    // La venta corta la amortización. Con granularidad mensual, el mes en que
+    // se vendió todavía paga su cuota.
+    const finVidaUtil = amortizable ? inicio + g.amortizar_meses - 1 : inicio - 1;
+    const ultimo = mesVenta != null ? Math.min(finVidaUtil, mesVenta) : finVidaUtil;
+    const cuota = amortizable ? base / g.amortizar_meses : 0;
+
+    if (amortizable) {
+      const primeroCobrado = Math.max(inicio, desdeMes ?? inicio);
+      const ultimoCobrado = Math.min(hastaMes, ultimo);
+      const meses = Math.max(0, ultimoCobrado - primeroCobrado + 1);
+      // Solo cuenta como cuota vigente si al cerrar el periodo seguía activa.
+      if (hastaMes >= inicio && hastaMes <= ultimo) cuotaMensual += cuota;
+      if (meses) {
+        total += cuota * meses;
+        detalle.push({
+          id: g.id,
+          descripcion: g.descripcion,
+          valor_cop: r0(valor),
+          valor_residual_cop: r0(residual),
+          amortizar_meses: g.amortizar_meses,
+          cuota_mensual_cop: r0(cuota),
+          meses_cobrados: meses,
+          cop: r0(cuota * meses),
+          termina: mesTexto(ultimo),
+          cortado_por_venta: mesVenta != null && mesVenta < finVidaUtil,
+        });
+      }
+    }
+
+    // Resultado de la venta: se reconoce en el periodo en que se vendió.
+    if (mesVenta != null) {
+      const mesesAcumulados = Math.max(0, ultimo - inicio + 1);
+      const enLibros = valor - cuota * mesesAcumulados;
+      const enPeriodo = (desdeMes == null || mesVenta >= desdeMes) && mesVenta <= hastaMes;
+      if (enPeriodo) {
+        const recibido = g.valor_venta_cop ?? 0;
+        const resultado = recibido - enLibros;
+        resultadoVentas += resultado;
+        ventas.push({
+          id: g.id,
+          descripcion: g.descripcion,
+          fecha_venta: g.fecha_venta,
+          valor_cop: r0(valor),
+          meses_amortizados: mesesAcumulados,
+          valor_en_libros_cop: r0(enLibros),
+          valor_venta_cop: r0(recibido),
+          resultado_cop: r0(resultado),
+        });
+        if (g.valor_venta_cop == null) {
+          avisos.push(`"${g.descripcion ?? `gasto #${g.id}`}" está marcado como vendido el ${g.fecha_venta} pero sin anotar por cuánto: se está contando como pérdida total de los $${r0(enLibros).toLocaleString('es-CO')} que quedaban en libros.`);
+        }
+      }
+    }
   }
 
   return {
     cop: r0(total),
     cuota_mensual_cop: r0(cuotaMensual),
     detalle,
+    ventas,
+    resultado_ventas_cop: r0(resultadoVentas),
     sin_vida_util: sinVidaUtil,
+    avisos,
   };
 }
 
@@ -518,6 +580,7 @@ export function gastoGeneralPorKg(db, { desde, hasta, estado = 'tostado_grano' }
       .join(', ');
     avisos.push(`Hay inversiones sin vida útil: ${lista}. Mientras no tengan "amortizar meses" no cargan nada al costo del kg, así que el café se ve más barato de lo que es. Ponerle vida útil (tostadora ~60 meses, molino ~36, diseño de empaques ~24) reparte la compra en cuotas mensuales.`);
   }
+  avisos.push(...amortizacion.avisos);
   if (copPorKg != null && producidos < 100) {
     avisos.push(`Son pocos kg (${r2(producidos)}) para repartir los gastos: cualquier gasto grande de una sola vez (un equipo, un diseño, una compra de insumos para meses) hace ver el kg mucho más caro de lo que es. Márquelos como inversión con su vida útil, o reparta sobre un periodo más largo.`);
   }

@@ -316,6 +316,78 @@ test('inversión con vida útil: se reparte por mes y baja la utilidad', async (
   assert.equal(todo.depreciacion_cop, 6000000);
 });
 
+test('valor residual: la cuota se reparte sobre valor − residual', async () => {
+  // 2.400.000 con residual de 400.000 en 20 meses = 100.000 por mes.
+  const inv = await pedir('/api/gastos', {
+    metodo: 'POST',
+    cuerpo: {
+      fecha: '2027-03-10', categoria: 'equipos', descripcion: 'Molino con residual',
+      valor_cop: 2400000, tipo_costo: 'inversion', amortizar_meses: 20, valor_residual_cop: 400000,
+    },
+  });
+  assert.equal(inv.status, 201);
+
+  const { json: mes } = await pedir('/api/contabilidad/resultados?desde=2027-03-01&hasta=2027-03-31');
+  const linea = mes.amortizacion.detalle.find((a) => a.descripcion === 'Molino con residual');
+  assert.equal(linea.cuota_mensual_cop, 100000, '(2.400.000 − 400.000) ÷ 20');
+  assert.equal(linea.valor_residual_cop, 400000);
+
+  // Toda la vida útil amortiza 2.000.000, no 2.400.000: el residual se queda.
+  const { json: todo } = await pedir('/api/contabilidad/resultados?desde=2027-03-01&hasta=2028-10-31');
+  const total = todo.amortizacion.detalle.find((a) => a.descripcion === 'Molino con residual');
+  assert.equal(total.cop, 2000000);
+});
+
+test('venta del equipo: corta la amortización y deja ganancia o pérdida', async () => {
+  // 1.200.000 en 12 meses = 100.000 por mes, desde abril de 2027.
+  // Vendida en junio: 3 cuotas (abr, may, jun) -> en libros 900.000.
+  await pedir('/api/gastos', {
+    metodo: 'POST',
+    cuerpo: {
+      fecha: '2027-04-05', categoria: 'equipos', descripcion: 'Selladora vendida',
+      valor_cop: 1200000, tipo_costo: 'inversion', amortizar_meses: 12,
+      fecha_venta: '2027-06-20', valor_venta_cop: 1000000,
+    },
+  });
+
+  const { json: jun } = await pedir('/api/contabilidad/resultados?desde=2027-06-01&hasta=2027-06-30');
+  const venta = jun.amortizacion.ventas.find((v) => v.descripcion === 'Selladora vendida');
+  assert.equal(venta.meses_amortizados, 3);
+  assert.equal(venta.valor_en_libros_cop, 900000);
+  assert.equal(venta.resultado_cop, 100000, 'se vendió en 1.000.000 y quedaban 900.000');
+  // El resultado de la venta va aparte de la utilidad operativa.
+  assert.equal(jun.resultado_venta_equipos_cop, 100000);
+  assert.equal(jun.resultado_periodo_cop, jun.utilidad_operativa_cop + 100000);
+
+  // Después de vendida ya no amortiza, y el resultado no se repite.
+  const { json: jul } = await pedir('/api/contabilidad/resultados?desde=2027-07-01&hasta=2027-12-31');
+  assert.ok(!jul.amortizacion.detalle.some((a) => a.descripcion === 'Selladora vendida'));
+  assert.equal(jul.amortizacion.ventas.length, 0);
+
+  // En total amortizó 3 cuotas de las 12, no las 12.
+  const { json: vida } = await pedir('/api/contabilidad/resultados?desde=2027-04-01&hasta=2028-12-31');
+  const corte = vida.amortizacion.detalle.find((a) => a.descripcion === 'Selladora vendida');
+  assert.equal(corte.cop, 300000);
+  assert.equal(corte.cortado_por_venta, true);
+  assert.equal(corte.termina, '2027-06');
+});
+
+test('venta sin precio anotado: pérdida total y aviso', async () => {
+  await pedir('/api/gastos', {
+    metodo: 'POST',
+    cuerpo: {
+      fecha: '2028-01-10', categoria: 'equipos', descripcion: 'Balanza dada de baja',
+      valor_cop: 600000, tipo_costo: 'inversion', amortizar_meses: 12, fecha_venta: '2028-02-15',
+    },
+  });
+  const { json: feb } = await pedir('/api/contabilidad/resultados?desde=2028-02-01&hasta=2028-02-28');
+  const v = feb.amortizacion.ventas.find((x) => x.descripcion === 'Balanza dada de baja');
+  assert.equal(v.valor_venta_cop, 0);
+  assert.equal(v.valor_en_libros_cop, 500000, '600.000 menos 2 cuotas de 50.000');
+  assert.equal(v.resultado_cop, -500000);
+  assert.match(feb.amortizacion.avisos.join(' '), /sin anotar por cuánto/);
+});
+
 test('la cuota de la inversión entra al costo del kg; sin vida útil no carga pero avisa', async () => {
   const { json: gg } = await pedir('/api/costos/gastos-por-kg?desde=2026-11-01&hasta=2026-11-30');
   assert.equal(gg.amortizacion_cop, 100000);
@@ -421,4 +493,74 @@ test('respaldo: exige la clave de acceso', async () => {
   } finally {
     s.close();
   }
+});
+
+test('claves por persona: marcan quién registró y no se pueden falsear', async () => {
+  const app = crearApp(db, {
+    apiToken: 'clave-compartida',
+    usuarios: [{ nombre: 'Maick', token: 'clave-de-maick' }, { nombre: 'Jhon', token: 'clave-de-jhon' }],
+    timezone: 'America/Bogota',
+    uploadsDir,
+    publicDir: path.resolve('public'),
+  });
+  const s = app.listen(0, '127.0.0.1');
+  await new Promise((ok) => s.once('listening', ok));
+  const url = `http://127.0.0.1:${s.address().port}`;
+  const como = (clave, ruta, opciones = {}) => fetch(`${url}${ruta}`, {
+    ...opciones,
+    headers: { ...(opciones.body ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${clave}` },
+  });
+
+  try {
+    // Cada clave dice quién es; la compartida entra sin nombre.
+    assert.equal((await (await como('clave-de-maick', '/api/yo')).json()).usuario, 'Maick');
+    assert.equal((await (await como('clave-de-jhon', '/api/yo')).json()).usuario, 'Jhon');
+    const compartida = await (await como('clave-compartida', '/api/yo')).json();
+    assert.equal(compartida.usuario, null);
+    assert.equal(compartida.clave_compartida, true);
+    assert.deepEqual(compartida.personas, ['Maick', 'Jhon']);
+    assert.equal((await fetch(`${url}/api/yo`)).status, 401);
+
+    // Lo que registra cada uno queda marcado con su nombre.
+    const deJhon = await (await como('clave-de-jhon', '/api/gastos', {
+      method: 'POST',
+      body: JSON.stringify({ fecha: '2026-10-26', categoria: 'transporte', descripcion: 'Flete de la trilla', valor_cop: 30000 }),
+    })).json();
+    assert.equal(deJhon.registrado_por, 'Jhon');
+
+    // Mandarlo en el cuerpo no sirve: lo pone el servidor, no el cliente.
+    const mentira = await (await como('clave-de-maick', '/api/gastos', {
+      method: 'POST',
+      body: JSON.stringify({ fecha: '2026-10-26', categoria: 'otros', descripcion: 'Intento', valor_cop: 1000, registrado_por: 'Jhon' }),
+    })).json();
+    assert.equal(mentira.registrado_por, 'Maick');
+
+    // Y editar después no reescribe quién lo registró.
+    const editado = await (await como('clave-de-maick', `/api/gastos/${deJhon.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ valor_cop: 35000, registrado_por: 'Maick' }),
+    })).json();
+    assert.equal(editado.valor_cop, 35000);
+    assert.equal(editado.registrado_por, 'Jhon', 'el registro sigue siendo de quien lo hizo');
+
+    // Un PUT completo tampoco lo borra.
+    const reemplazado = await (await como('clave-de-maick', `/api/gastos/${deJhon.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ fecha: '2026-10-26', categoria: 'transporte', descripcion: 'Flete', valor_cop: 40000 }),
+    })).json();
+    assert.equal(reemplazado.registrado_por, 'Jhon');
+  } finally {
+    s.close();
+  }
+});
+
+test('sin claves por persona todo sigue funcionando sin nombre', async () => {
+  const { json } = await pedir('/api/yo');
+  assert.equal(json.usuario, null);
+  assert.equal(json.clave_compartida, false, 'este servidor de prueba no pide clave');
+  const g = await pedir('/api/gastos', {
+    metodo: 'POST',
+    cuerpo: { fecha: '2026-10-27', categoria: 'otros', descripcion: 'Sin clave propia', valor_cop: 500 },
+  });
+  assert.equal(g.json.registrado_por, null);
 });

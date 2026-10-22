@@ -22,6 +22,20 @@ La primera vez se crean la base de datos, la finca (13 ha, coordenadas 7.590401,
 
 Opcional: copie `.env.example` como `.env` para cambiar el puerto, la ruta de datos o el token.
 
+### Quién registró cada cosa
+
+Con `API_TOKEN` todos entran con la misma clave y los registros quedan sin
+nombre. Con `USUARIOS=Nombre:clave,Otro:clave` cada persona tiene la suya, y el
+servidor marca cada lote, proceso, venta y gasto en `registrado_por` según la
+clave con la que se entró. Ese campo **no sale en los formularios** y no se
+puede cambiar después: ni mandándolo en el cuerpo de la petición, ni editando el
+registro, ni con un `PUT` completo. `GET /api/yo` dice quién está entrando, y el
+panel lo muestra en el inicio y en Registrar.
+
+Las dos formas conviven, para poder cambiar sin cortar el acceso. Cuando todos
+tengan su clave propia, borre `API_TOKEN` para que ningún registro quede sin
+nombre.
+
 ### Usarlo desde el celular en la finca
 
 En `.env` ponga `HOST=0.0.0.0` y un `API_TOKEN` largo. Al arrancar, el servidor muestra la dirección de red local (p. ej. `http://192.168.1.20:3000`). El panel pide el token la primera vez.

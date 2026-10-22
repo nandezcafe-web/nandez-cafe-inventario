@@ -22,6 +22,23 @@ function tokenValido(recibido, esperado) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// Identifica quién entra. Con claves por persona se devuelve el nombre, para
+// marcar quién registró cada cosa; con la clave compartida se entra igual pero
+// sin nombre. Se recorren todas las claves siempre, sin cortar al primer
+// acierto, para no filtrar por tiempo de respuesta cuál acertó.
+function identificar(recibido, config) {
+  let nombre = null;
+  let ok = false;
+  for (const u of config.usuarios ?? []) {
+    if (tokenValido(recibido, u.token)) {
+      nombre = u.nombre;
+      ok = true;
+    }
+  }
+  if (config.apiToken && tokenValido(recibido, config.apiToken)) ok = true;
+  return { ok, nombre };
+}
+
 export function crearApp(db, config) {
   const app = express();
   app.disable('x-powered-by');
@@ -29,13 +46,26 @@ export function crearApp(db, config) {
 
   app.get('/api/salud', (_req, res) => res.json({ ok: true, version: '0.1.0' }));
 
-  if (config.apiToken) {
+  const pideClave = Boolean(config.apiToken) || (config.usuarios ?? []).length > 0;
+  if (pideClave) {
     app.use(['/api', '/uploads'], (req, _res, next) => {
       const token = req.get('authorization')?.replace(/^Bearer\s+/i, '') ?? req.query.token;
-      if (!tokenValido(token, config.apiToken)) throw new ErrorHttp(401, 'Token inválido o ausente');
+      const quien = identificar(token, config);
+      if (!quien.ok) throw new ErrorHttp(401, 'Token inválido o ausente');
+      req.usuario = quien.nombre;
       next();
     });
   }
+
+  // Quién está entrando con esta clave. El panel lo muestra en la cabecera para
+  // que nadie registre creyendo que es el otro.
+  app.get('/api/yo', (req, res) => {
+    res.json({
+      usuario: req.usuario ?? null,
+      clave_compartida: pideClave && !req.usuario,
+      personas: (config.usuarios ?? []).map((u) => u.nombre),
+    });
+  });
 
   // Esquema del modelo: lo usa el panel web para construir formularios.
   app.get('/api/esquema', (_req, res) => {

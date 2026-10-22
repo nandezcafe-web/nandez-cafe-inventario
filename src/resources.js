@@ -355,7 +355,7 @@ export const recursos = {
     etiqueta: 'Procesos',
     campoEtiqueta: 'tipo',
     campoFecha: 'fecha',
-    columnas: ['fecha', 'tipo', 'lote_cafe_id', 'kg_entrada', 'kg_salida'],
+    columnas: ['fecha', 'tipo', 'lote_cafe_id', 'kg_entrada', 'kg_salida', 'registrado_por'],
     campos: {
       lote_cafe_id: { tipo: 'ref', ref: 'lotes_cafe', requerido: true },
       fecha: { tipo: 'fecha', requerido: true },
@@ -410,7 +410,7 @@ export const recursos = {
     etiqueta: 'Ventas',
     campoEtiqueta: 'cliente',
     campoFecha: 'fecha',
-    columnas: ['fecha', 'cliente', 'canal', 'unidades', 'total_cop', 'estado_pago'],
+    columnas: ['fecha', 'cliente', 'canal', 'unidades', 'total_cop', 'estado_pago', 'registrado_por'],
     campos: {
       fecha: { tipo: 'fecha', requerido: true },
       lote_cafe_id: { tipo: 'ref', ref: 'lotes_cafe', ayuda: 'De qué lote salió (trazabilidad)' },
@@ -460,6 +460,18 @@ export const recursos = {
         tipo: 'entero', min: 1, max: 240,
         ayuda: 'Solo para inversión: en cuántos meses se reparte. Tostadora ~60, molino ~36, diseño de empaques ~24',
       },
+      valor_residual_cop: {
+        tipo: 'real', min: 0,
+        ayuda: 'Lo que cree que valdrá al final de su vida útil. La cuota se reparte sobre valor − residual',
+      },
+      fecha_venta: {
+        tipo: 'fecha',
+        ayuda: 'Si ya se vendió o se dio de baja: la amortización se detiene ese mes',
+      },
+      valor_venta_cop: {
+        tipo: 'real', min: 0,
+        ayuda: 'Lo que recibió por venderlo. Si fue menos de lo que quedaba en libros, la diferencia es pérdida',
+      },
       medio_pago: { tipo: 'opcion', opciones: ['efectivo', 'transferencia', 'tarjeta', 'credito', 'otro'] },
       notas: { tipo: 'texto', largo: true },
     },
@@ -480,3 +492,15 @@ export const recursos = {
     },
   },
 };
+
+// Marca de quién registró cada cosa. La pone el servidor según la clave con la
+// que se entró (ver USUARIOS en .env.example), nunca el formulario: por eso va
+// con `auto`, que la saca de los formularios y la protege de cambios. Solo en
+// los registros del negocio, que son los que importa poder atribuir.
+for (const tabla of ['lotes_cafe', 'procesos_cafe', 'ventas', 'gastos']) {
+  recursos[tabla].campos.registrado_por = {
+    tipo: 'texto',
+    auto: true,
+    ayuda: 'Lo pone el sistema según la clave con la que se entró',
+  };
+}

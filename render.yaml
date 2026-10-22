@@ -36,7 +36,12 @@ services:
         value: America/Bogota
       - key: CLIMA_AUTO_HORAS
         value: "3"
-      # Clave de acceso: Render genera una al crear el servicio. Se copia desde
+      # Clave compartida: Render genera una al crear el servicio. Se copia desde
       # el panel (Environment) y se pega en el celular la primera vez.
       - key: API_TOKEN
         generateValue: true
+      # Una clave por persona, para que cada registro quede con nombre. Render no
+      # puede generar este formato, así que queda vacía y se llena a mano en el
+      # panel: Environment → USUARIOS → Nombre:clave,Otro:clave
+      - key: USUARIOS
+        sync: false

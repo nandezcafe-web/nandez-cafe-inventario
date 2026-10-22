@@ -83,8 +83,14 @@ export function crearRouterCrud(db, tabla, rec) {
 
   if (rec.soloLectura) return r;
 
+  // Campos que pone el servidor, no el cliente: se asignan después de validar
+  // para que nadie los mande en el cuerpo, y no se tocan al actualizar.
+  const automaticos = Object.entries(rec.campos).filter(([, d]) => d.auto).map(([n]) => n);
+
   r.post('/', (req, res) => {
     const datos = validarRegistro(rec, req.body);
+    for (const n of automaticos) delete datos[n];
+    if (rec.campos.registrado_por && req.usuario) datos.registrado_por = req.usuario;
     const cols = Object.keys(datos);
     try {
       const info = cols.length
@@ -106,6 +112,8 @@ export function crearRouterCrud(db, tabla, rec) {
     if (!parcial) {
       for (const c of Object.keys(rec.campos)) if (!Object.hasOwn(datos, c)) datos[c] = null;
     }
+    // Quién registró no se reescribe: ni al editar ni con un PUT completo.
+    for (const n of automaticos) delete datos[n];
     const cols = Object.keys(datos);
     if (cols.length) {
       try {

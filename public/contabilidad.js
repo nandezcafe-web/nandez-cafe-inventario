@@ -375,6 +375,11 @@ async function vistaResultados() {
     `<tr><td>− Gastos operativos</td><td class="num">${pesos(r.gastos_operativos_cop)}</td></tr>`,
     `<tr><td>− Depreciación de equipos${r.amortizacion?.cuota_mensual_cop ? ` <span class="suave pequeno">${pesos(r.amortizacion.cuota_mensual_cop)}/mes</span>` : ''}</td><td class="num">${pesos(r.depreciacion_cop)}</td></tr>`,
     `<tr><td><b>= Utilidad operativa</b></td><td class="num"><b>${pesos(r.utilidad_operativa_cop)}</b></td></tr>`,
+    // La venta de un equipo no es operación del café: solo aparece si hubo una.
+    ...(r.amortizacion?.ventas?.length ? [
+    `<tr><td>${r.resultado_venta_equipos_cop >= 0 ? '+' : '−'} ${r.resultado_venta_equipos_cop >= 0 ? 'Ganancia' : 'Pérdida'} en venta de equipos</td><td class="num">${pesos(Math.abs(r.resultado_venta_equipos_cop))}</td></tr>`,
+    `<tr><td><b>= Resultado del periodo</b></td><td class="num"><b>${pesos(r.resultado_periodo_cop)}</b></td></tr>`,
+  ] : []),
   ])}
         <p class="suave pequeno" style="margin-top:8px">${H.esc(r.aviso)}</p>
       </section>
@@ -402,9 +407,18 @@ async function vistaResultados() {
         <h2 style="margin-top:12px">Qué se está amortizando</h2>
         ${tabla(['Inversión', { t: 'Cuota mensual', num: true }, { t: 'En el periodo', num: true }],
     r.amortizacion.detalle.map((a) => `<tr>
-          <td>${H.esc(a.descripcion ?? 'sin descripción')}<br><span class="suave pequeno">${pesos(a.valor_cop)} en ${a.amortizar_meses} meses · termina ${H.esc(a.termina)}</span></td>
+          <td>${H.esc(a.descripcion ?? 'sin descripción')}<br><span class="suave pequeno">${pesos(a.valor_cop)}${a.valor_residual_cop ? ` − ${pesos(a.valor_residual_cop)} residual` : ''} en ${a.amortizar_meses} meses · ${a.cortado_por_venta ? 'cortada por la venta en' : 'termina'} ${H.esc(a.termina)}</span></td>
           <td class="num">${pesos(a.cuota_mensual_cop)}</td>
           <td class="num"><b>${pesos(a.cop)}</b><br><span class="suave pequeno">${a.meses_cobrados} mes(es)</span></td></tr>`))}` : ''}
+        ${r.amortizacion?.ventas?.length ? `
+        <h2 style="margin-top:12px">Equipos vendidos</h2>
+        ${tabla(['Equipo', { t: 'En libros', num: true }, { t: 'Se vendió en', num: true }, { t: 'Resultado', num: true }],
+    r.amortizacion.ventas.map((v) => `<tr>
+          <td>${H.esc(v.descripcion ?? 'sin descripción')}<br><span class="suave pequeno">costó ${pesos(v.valor_cop)} · ${v.meses_amortizados} mes(es) amortizados · vendido ${H.esc(v.fecha_venta)}</span></td>
+          <td class="num">${pesos(v.valor_en_libros_cop)}</td>
+          <td class="num">${pesos(v.valor_venta_cop)}</td>
+          <td class="num"><b class="${v.resultado_cop < 0 ? 'negativo' : ''}">${v.resultado_cop >= 0 ? '+' : '−'}${pesos(Math.abs(v.resultado_cop))}</b></td></tr>`))}
+        <p class="suave pequeno">En libros es lo que quedaba por amortizar. Si se vendió por menos, la diferencia es pérdida.</p>` : ''}
         ${r.amortizacion?.sin_vida_util?.length ? `<div class="alerta media">Sin vida útil, no cargan nada al costo: ${r.amortizacion.sin_vida_util.map((g) => `${H.esc(g.descripcion ?? 'sin descripción')} (${pesos(g.valor_cop)})`).join(', ')}. Póngales "amortizar meses" en Gastos.</div>` : ''}
         <h2 style="margin-top:12px">Gastos por categoría</h2>
         ${tabla(['Categoría', { t: 'COP', num: true }],
@@ -453,7 +467,7 @@ async function vistaRegistrar() {
 
   H.vista.innerHTML = `
     <h1>Registrar proceso</h1>
-    <p class="suave">Lo mínimo es: qué hizo, cuántos kg entraron y cuántos salieron. Los costos se pueden completar después.</p>
+    <p class="suave">Lo mínimo es: qué hizo, cuántos kg entraron y cuántos salieron. Los costos se pueden completar después.${H.usuario ? ` Queda registrado a nombre de <b>${H.esc(H.usuario)}</b>.` : ''}</p>
     <div class="herramientas">
       <div class="crece"><label for="rp-lote">Lote</label>
         <select id="rp-lote">${RP.lotes.map((l) => `<option value="${l.id}">${H.esc(l.codigo)} · ${H.esc(l.fecha)}${l.variedad ? ` · ${H.esc(l.variedad)}` : ''}</option>`).join('')}</select></div>
