@@ -6,7 +6,7 @@ import { crearApp } from './app.js';
 import { sincronizarOpenMeteo } from './routes/clima.js';
 import { calcularPrediccion } from './lib/prediccion.js';
 
-const db = await abrirDb(config.dbPath);
+const db = await abrirDb(config.databaseUrl ?? config.dbPath);
 if (await sembrarSiVacia(db)) console.log('Base de datos nueva: se cargaron la finca, los lotes y las oportunidades iniciales.');
 
 const app = crearApp(db, config);
@@ -17,7 +17,7 @@ const servidor = app.listen(config.port, config.host, () => {
     for (const i of ips) console.log(`  En la red local: http://${i.address}:${config.port}`);
     if (!config.apiToken) console.warn('  ⚠ Accesible en la red SIN API_TOKEN. Defina API_TOKEN en .env.');
   }
-  console.log(`Base de datos: ${config.dbPath}`);
+  console.log(`Base de datos: ${config.databaseUrl ? `Postgres en ${new URL(config.databaseUrl).hostname}` : config.dbPath}`);
 });
 
 // Monitoreo automático de clima y riesgos para cada finca con coordenadas.

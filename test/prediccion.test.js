@@ -98,7 +98,7 @@ const pedir = async (ruta, { metodo = 'GET', cuerpo } = {}) => {
 
 before(async () => {
   uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cafe-pred-'));
-  db = await abrirDb(':memory:');
+  db = await abrirDb(process.env.BD_PRUEBAS ?? ':memory:');
   await sembrarSiVacia(db);
   const app = crearApp(db, { apiToken: null, timezone: TZ, uploadsDir, publicDir: path.resolve('public'), fetchImpl: fetchFalso });
   await new Promise((ok) => { servidor = app.listen(0, '127.0.0.1', ok); });

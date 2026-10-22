@@ -43,7 +43,7 @@ async function fetchFalso(entrada) {
 }
 
 before(async () => {
-  db = await abrirDb(':memory:');
+  db = await abrirDb(process.env.BD_PRUEBAS ?? ':memory:');
   await sembrarSiVacia(db);
   const app = crearApp(db, {
     apiToken: null, timezone: 'America/Bogota', uploadsDir: path.join(os.tmpdir(), 'cafe-mapa-test'), publicDir: path.resolve('public'),

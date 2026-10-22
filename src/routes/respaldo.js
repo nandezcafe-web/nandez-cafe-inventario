@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { ErrorHttp } from '../lib/errores.js';
+import { respaldar } from '../db/index.js';
 
 // Descarga de respaldo de la base.
 //
@@ -21,7 +22,7 @@ export function routerRespaldo(db) {
   r.get('/', async (_req, res) => {
     const temporal = path.join(os.tmpdir(), `respaldo-${crypto.randomUUID()}.sqlite`);
     try {
-      await db.respaldarEn(temporal);
+      await respaldar(db, temporal);
     } catch (e) {
       throw new ErrorHttp(500, `No se pudo preparar el respaldo: ${e.message}`);
     }

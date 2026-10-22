@@ -53,7 +53,7 @@ export function routerInteligencia(db) {
         pesos[c] = n;
       }
     }
-    const filas = await db.todos("SELECT * FROM oportunidades WHERE estado IS NOT 'descartada'");
+    const filas = await db.todos("SELECT * FROM oportunidades WHERE estado IS DISTINCT FROM 'descartada'");
     const ranking = filas
       .map((o) => ({ id: o.id, nombre: o.nombre, subproducto: o.subproducto, linea: o.linea, estado: o.estado, ...indiceOportunidad(o, pesos) }))
       .sort((a, b) => (b.indice ?? -1) - (a.indice ?? -1));

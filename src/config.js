@@ -25,6 +25,9 @@ export const config = {
   dbPath: process.env.DB_PATH === ':memory:'
     ? ':memory:'
     : path.resolve(raiz, process.env.DB_PATH ?? 'data/cafe.db'),
+  // Con DATABASE_URL (Supabase) la base vive en Postgres; sin ella, en el
+  // archivo SQLite de dbPath. Ver src/db/index.js.
+  databaseUrl: process.env.DATABASE_URL || null,
   uploadsDir: path.resolve(raiz, process.env.UPLOADS_DIR ?? 'data/uploads'),
   apiToken: process.env.API_TOKEN || null,
   // USUARIOS=Maick:clave1,Jhon:clave2 — una clave por persona, para saber quién
