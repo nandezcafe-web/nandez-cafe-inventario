@@ -37,8 +37,11 @@ la contraseña: hay que generar un token en
 contraseña.
 
 **La base de datos no se sube**, y está bien: `.gitignore` excluye `data/`.
-Sus lotes y ventas se quedan en su computador; el servidor en línea arranca
-vacío. Más abajo está cómo pasar lo que ya tiene.
+Sus lotes y ventas se quedan en su computador. El servidor en línea crea su
+propia base y la siembra igual que la primera vez: la finca de 13 ha, el Lote 1,
+el Lote 2 y las 8 ideas de oportunidad. Lo que **no** llega es lo del café —
+el lote comprado, el productor y las presentaciones. Más abajo está cómo
+pasarlo.
 
 ## 2. Crear el servicio en Render
 
@@ -76,9 +79,10 @@ Lo mismo en el celular de su hermano. La misma clave sirve para los dos.
 
 ## 5. Pasar lo que ya tiene registrado
 
-El servidor en línea arranca vacío. Hoy eso es poco: un lote de café, cuatro
-presentaciones y un productor. Lo más sencillo es volver a registrarlo a mano
-desde el panel en línea, son unos minutos:
+El servidor en línea arranca con la finca y sus dos lotes ya sembrados, pero sin
+nada del café que usted compra. Hoy eso es poco: un lote, cuatro presentaciones
+y un productor. Lo más sencillo es volver a registrarlo a mano desde el panel en
+línea, son unos minutos:
 
 - **Finca → Productores:** Productor Uno, Chinácota.
 - **Café → Lotes:** DT-2026-01, 2026-10-21, compra, castillo, pergamino seco,
@@ -109,7 +113,8 @@ los procesos y **Cliente** en las ventas.
   subido (sí lo está) y que Render use Node 24 (`NODE_VERSION` ya lo fija).
 - **Responde "Token inválido o ausente":** la clave está mal copiada. Vuelva a
   copiarla de Environment, completa y sin espacios.
-- **El panel carga pero sin datos:** normal al principio; el servidor en línea
-  arranca con su propia base vacía.
+- **El panel carga pero sin su café:** normal al principio. El servidor en línea
+  tiene su propia base, sembrada con la finca y los dos lotes, pero sin el lote
+  comprado ni las presentaciones: hay que registrarlos allá (paso 5).
 - **Cambió algo en el código:** con `git push` Render vuelve a desplegar solo.
 - **Ver qué pasó:** pestaña **Logs** del servicio en Render.
