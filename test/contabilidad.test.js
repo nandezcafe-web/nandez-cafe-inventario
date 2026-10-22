@@ -47,7 +47,7 @@ let presentacionId;
 test('lote de café: costo de entrada por kg', async () => {
   const prod = await pedir('/api/productores', {
     metodo: 'POST',
-    cuerpo: { nombre: 'Productor Uno', municipio: 'Chinácota', relacion: 'conocido', disposicion: 'vender' },
+    cuerpo: { nombre: 'Productor de prueba', municipio: 'Chinácota', relacion: 'conocido', disposicion: 'vender' },
   });
   assert.equal(prod.status, 201);
 

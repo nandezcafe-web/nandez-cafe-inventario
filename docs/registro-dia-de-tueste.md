@@ -1,6 +1,7 @@
 # Qué anotar hoy en la trilla y el tueste
 
-Lote **DT-2026-01** · 51 kg de pergamino castillo · Productor Uno · $1.122.000 ($22.000/kg) · ya registrado.
+Lote **DT-2026-01** · 51 kg de pergamino castillo · $1.122.000 ($22.000/kg) · ya registrado.
+El productor queda registrado en la base, no en este documento.
 
 Si no se pesa, el costo no existe. Anote esto en el celular o en papel y después se pasa al panel (**Procesos** → nuevo).
 

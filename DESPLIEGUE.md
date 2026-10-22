@@ -104,7 +104,7 @@ nada del café que usted compra. Hoy eso es poco: un lote, cuatro presentaciones
 y un productor. Lo más sencillo es volver a registrarlo a mano desde el panel en
 línea, son unos minutos:
 
-- **Finca → Productores:** Productor Uno, Chinácota.
+- **Finca → Productores:** el productor al que le compró, con su municipio.
 - **Café → Lotes:** DT-2026-01, 2026-10-21, compra, castillo, pergamino seco,
   51 kg, $22.000/kg (valor total $1.122.000).
 - **Café → Presentaciones:** las cuatro bolsas, con su costo de empaque y precio
