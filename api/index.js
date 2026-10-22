@@ -16,7 +16,9 @@ let preparando = null;
 function preparar() {
   preparando ??= (async () => {
     if (!config.databaseUrl) {
-      throw new Error('Falta DATABASE_URL: en línea la base es Supabase (ver DESPLIEGUE.md).');
+      throw new Error(config.databaseUrlSinClave
+        ? 'DATABASE_URL todavía dice [YOUR-PASSWORD]: falta la contraseña.'
+        : 'Falta DATABASE_URL: en línea la base es Supabase (ver DESPLIEGUE.md).');
     }
     const db = await abrirDb(config.databaseUrl);
     await sembrarSiVacia(db);
@@ -39,9 +41,11 @@ export default async function handler(req, res) {
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({
-      error: config.databaseUrl
-        ? 'El servidor no pudo conectarse a la base de datos. Revise DATABASE_URL en Vercel y el registro de la función.'
-        : 'Falta configurar DATABASE_URL en Vercel.',
+      error: config.databaseUrlSinClave
+        ? 'DATABASE_URL en Vercel todavía dice [YOUR-PASSWORD]: reemplácelo por la contraseña de la base.'
+        : config.databaseUrl
+          ? 'El servidor no pudo conectarse a la base de datos. Revise DATABASE_URL en Vercel y el registro de la función.'
+          : 'Falta configurar DATABASE_URL en Vercel.',
     }));
     return;
   }

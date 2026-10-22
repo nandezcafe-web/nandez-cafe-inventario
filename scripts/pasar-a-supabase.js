@@ -23,7 +23,9 @@ const reemplazar = process.argv.includes('--reemplazar');
 const destinoUrl = process.env.DESTINO || config.databaseUrl; // DESTINO solo para probar con PGlite
 
 if (!destinoUrl) {
-  console.error('Falta DATABASE_URL en .env: es la cadena de conexión de Supabase (ver DESPLIEGUE.md).');
+  console.error(config.databaseUrlSinClave
+    ? 'DATABASE_URL en .env todavía dice [YOUR-PASSWORD]: reemplácelo por la contraseña de la base.'
+    : 'Falta DATABASE_URL en .env: es la cadena de conexión de Supabase (ver DESPLIEGUE.md).');
   process.exit(1);
 }
 

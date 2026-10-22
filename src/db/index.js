@@ -129,10 +129,29 @@ function columnaSql(dialecto, nombre, def) {
 
 // Huella del modelo de datos. En línea cada función arranca en frío, y revisar
 // tabla por tabla en cada arranque son decenas de viajes a la base: si la
-// huella guardada coincide, no hay nada que migrar.
+// huella guardada coincide, no hay nada que migrar. VERSION entra en la huella
+// para que un cambio en cómo se migra (no solo en el modelo) vuelva a correr.
+const VERSION = 2; // 2: tablas cerradas a la API pública de Supabase
+
 function huellaDelModelo() {
   const modelo = Object.entries(recursos).map(([t, r]) => [t, r.campos, r.unico ?? null, r.campoFecha ?? null]);
-  return crypto.createHash('sha256').update(JSON.stringify(modelo)).digest('hex').slice(0, 16);
+  return crypto.createHash('sha256').update(JSON.stringify([VERSION, modelo])).digest('hex').slice(0, 16);
+}
+
+// Supabase publica por su API toda tabla del esquema public, y la clave
+// publicable está hecha para ir dentro de páginas web. Sin esto, cualquiera con
+// esa clave podría leer y cambiar la contabilidad. Seguridad de filas (RLS) sin
+// ninguna política cierra la API por completo; el sistema entra como dueño de
+// las tablas y no lo afecta. Además se quitan los permisos a los roles de la API
+// (anon, authenticated), que solo existen en Supabase.
+async function cerrarALaApi(db, tabla) {
+  if (db.motor !== 'postgres') return;
+  await db.exec(`ALTER TABLE "${tabla}" ENABLE ROW LEVEL SECURITY`);
+  await db.exec(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      EXECUTE 'REVOKE ALL ON TABLE "${tabla}" FROM anon, authenticated';
+    END IF;
+  END $$`);
 }
 
 // Crea tablas nuevas y agrega columnas nuevas sin tocar los datos existentes.
@@ -154,6 +173,7 @@ export async function migrar(db) {
     datos TEXT NOT NULL,
     obtenido_en TEXT NOT NULL
   )`);
+  await cerrarALaApi(db, 'cache_externo');
 
   for (const [tabla, rec] of Object.entries(recursos)) {
     const columnas = Object.entries(rec.campos).map(([n, def]) => columnaSql(d, n, def));
@@ -163,6 +183,7 @@ export async function migrar(db) {
       creado_en TEXT NOT NULL DEFAULT ${d.ahora},
       actualizado_en TEXT NOT NULL DEFAULT ${d.ahora}
     )`);
+    await cerrarALaApi(db, tabla);
 
     const existentes = await db.columnas(tabla);
     for (const [n, def] of Object.entries(rec.campos)) {
@@ -182,6 +203,7 @@ export async function migrar(db) {
   }
 
   await db.exec('CREATE TABLE IF NOT EXISTS esquema_version (huella TEXT NOT NULL)');
+  await cerrarALaApi(db, 'esquema_version');
   await db.ejecutar('DELETE FROM esquema_version');
   await db.ejecutar('INSERT INTO esquema_version (huella) VALUES (?)', [huella]);
   return true;

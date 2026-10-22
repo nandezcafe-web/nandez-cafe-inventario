@@ -5,6 +5,9 @@ import { sembrarSiVacia } from './db/semilla.js';
 import { crearApp } from './app.js';
 import { monitorear } from './lib/monitoreo.js';
 
+if (config.databaseUrlSinClave) {
+  console.warn('⚠ DATABASE_URL todavía dice [YOUR-PASSWORD]: se sigue usando la base local hasta que ponga la contraseña.');
+}
 const db = await abrirDb(config.databaseUrl ?? config.dbPath);
 if (await sembrarSiVacia(db)) console.log('Base de datos nueva: se cargaron la finca, los lotes y las oportunidades iniciales.');
 

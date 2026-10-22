@@ -27,7 +27,9 @@ export const config = {
     : path.resolve(raiz, process.env.DB_PATH ?? 'data/cafe.db'),
   // Con DATABASE_URL (Supabase) la base vive en Postgres; sin ella, en el
   // archivo SQLite de dbPath. Ver src/db/index.js.
-  databaseUrl: process.env.DATABASE_URL || null,
+  databaseUrl: /\[YOUR-PASSWORD\]/i.test(process.env.DATABASE_URL ?? '') ? null : (process.env.DATABASE_URL || null),
+  // La cadena que da Supabase trae [YOUR-PASSWORD]: si sigue ahí, no se usa.
+  databaseUrlSinClave: /\[YOUR-PASSWORD\]/i.test(process.env.DATABASE_URL ?? ''),
   // En Vercel no hay disco propio ni un proceso que siga vivo entre peticiones:
   // cambia dónde van las fotos y cómo se sincroniza el clima.
   enLinea: Boolean(process.env.VERCEL),
