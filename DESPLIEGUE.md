@@ -98,10 +98,20 @@ el local.
 
 ## Lo que falta decidir
 
-**Respaldos.** El disco de Render guarda el archivo entre despliegues, pero el
-plan Starter no le hace copias. Si se daña, se pierde la contabilidad. Hoy no hay
-forma de bajar el archivo desde el panel: hay que agregar una ruta protegida
-para descargarlo, o una tarea programada que lo copie. Pendiente.
+**Respaldos: bájelos usted.** El disco de Render guarda el archivo entre
+despliegues, pero el plan Starter no le hace copias. En el inicio del panel, en
+la tarjeta **Qué hay registrado**, hay un enlace **⬇ Descargar respaldo**: le
+entrega toda la base en un archivo `.sqlite` consistente, listo para guardar en
+el computador o en la nube. Hágalo al menos una vez por semana, y siempre
+después de un día de mucho registro.
+
+Para volver de un respaldo: pare el servicio en Render, suba el archivo al disco
+como `/data/cafe.db` (pestaña **Shell** del servicio) y vuelva a arrancarlo.
+Todavía no hay un botón para restaurar; se hace a mano y conviene practicarlo
+una vez antes de necesitarlo.
+
+Lo que falta para no depender de acordarse: una tarea programada que baje la
+copia sola. Pendiente.
 
 **Una clave por persona.** Hoy la clave es compartida, así que el sistema no
 distingue quién registró qué. Mientras tanto, llenen el campo **Responsable** en

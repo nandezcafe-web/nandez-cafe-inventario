@@ -153,6 +153,7 @@ Criterios:
 | `GET /api/clima/diario` | Mínima, media y máxima, humedad y lluvia por día |
 | `POST /api/adjuntos` | `multipart`: `entidad`, `entidad_id`, `archivos[]` (imágenes, PDF o CSV de hasta 25 MB) |
 | `GET /api/exportar/<recurso>.csv` | CSV para Excel (separador `;`); acepta los mismos filtros |
+| `GET /api/respaldo` | Descarga toda la base en un archivo `.sqlite`. Usa `VACUUM INTO`, no copia el archivo en caliente: el resultado es consistente y se puede abrir con cualquier herramienta de SQLite. Exige la clave como el resto de `/api`. El enlace está en el inicio, en "Qué hay registrado" |
 | `GET /api/esquema` | Modelo de datos (el panel genera los formularios a partir de él) |
 
 ## Criterios importantes

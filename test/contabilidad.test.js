@@ -387,3 +387,38 @@ test('exportar a CSV los nuevos recursos', async () => {
   assert.match(texto, /codigo/);
   assert.match(texto, /DT-2026-01/);
 });
+
+test('respaldo: entrega una copia consistente y legible de la base', async () => {
+  const resp = await fetch(`${base}/api/respaldo`);
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get('content-disposition') ?? '', /nandez-cafe-\d{4}-\d{2}-\d{2}\.sqlite/);
+  assert.ok(Number(resp.headers.get('x-respaldo-bytes')) > 0);
+
+  // El archivo bajado tiene que abrirse como base de SQLite y traer los datos.
+  const archivo = path.join(uploadsDir, 'respaldo.sqlite');
+  fs.writeFileSync(archivo, Buffer.from(await resp.arrayBuffer()));
+  assert.equal(fs.readFileSync(archivo).subarray(0, 15).toString(), 'SQLite format 3');
+
+  const copia = abrirDb(archivo);
+  const lote = copia.prepare('SELECT codigo, kg_inicial FROM lotes_cafe WHERE codigo = ?').get('DT-2026-01');
+  assert.equal(lote.kg_inicial, 51);
+  const procesos = copia.prepare('SELECT COUNT(*) AS n FROM procesos_cafe WHERE lote_cafe_id = 1').get().n;
+  assert.equal(procesos, 2, 'la copia trae la trilla y el tueste');
+  const ventas = copia.prepare('SELECT COUNT(*) AS n FROM ventas').get().n;
+  assert.equal(ventas, 1);
+  copia.close();
+});
+
+test('respaldo: exige la clave de acceso', async () => {
+  const conClave = crearApp(db, { apiToken: 'clave-de-prueba', timezone: 'America/Bogota', uploadsDir, publicDir: path.resolve('public') });
+  const s = conClave.listen(0, '127.0.0.1');
+  await new Promise((ok) => s.once('listening', ok));
+  const url = `http://127.0.0.1:${s.address().port}/api/respaldo`;
+  try {
+    assert.equal((await fetch(url)).status, 401, 'sin clave no debe entregar la base');
+    const ok = await fetch(url, { headers: { Authorization: 'Bearer clave-de-prueba' } });
+    assert.equal(ok.status, 200);
+  } finally {
+    s.close();
+  }
+});

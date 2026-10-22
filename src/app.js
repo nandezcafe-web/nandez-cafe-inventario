@@ -14,6 +14,7 @@ import { routerPrediccion } from './routes/prediccion.js';
 import { routerPlan } from './routes/plan.js';
 import { routerMapa } from './routes/mapa.js';
 import { routerContabilidad } from './routes/contabilidad.js';
+import { routerRespaldo } from './routes/respaldo.js';
 
 function tokenValido(recibido, esperado) {
   const a = Buffer.from(recibido ?? '');
@@ -51,6 +52,7 @@ export function crearApp(db, config) {
   app.use('/api/clima', routerClima(db, config)); // antes del CRUD: /sincronizar y /diario
   app.use('/api/adjuntos', routerAdjuntos(db, config));
   app.use('/api/exportar', routerExportar(db));
+  app.use('/api/respaldo', routerRespaldo(db));
   app.use('/api', routerContabilidad(db));
   app.use('/api', routerInteligencia(db));
 

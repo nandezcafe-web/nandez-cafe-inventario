@@ -308,6 +308,10 @@ async function vistaResumen() {
         <h2>Qué hay registrado</h2>
         <p class="suave pequeno">Cada registro mejora los costos y la predicción.</p>
         <ul class="limpia">${registrosPorArea(r.registros)}</ul>
+        <p class="pequeno" style="margin-top:10px">
+          <a href="/api/respaldo${token() ? `?token=${encodeURIComponent(token())}` : ''}" download>⬇ Descargar respaldo</a>
+          <span class="suave">— un archivo con todo lo registrado. Guárdelo cada tanto: si el servidor se daña, es lo único que lo recupera.</span>
+        </p>
       </section>
     </div>
 
