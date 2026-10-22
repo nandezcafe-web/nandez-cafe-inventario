@@ -79,7 +79,27 @@ Puntos que conviene revisar en cualquier cambio de navegación o de panel:
 - **Objetivos de toque:** 44 px en las áreas, 40 px en las secciones.
 - **Modo oscuro:** emularlo; todo el color sale de variables en `:root`.
 
+## Postgres y Vercel sin tocar Supabase
+
+- **Las mismas pruebas sobre Postgres:** `BD_PRUEBAS=pglite:memoria npm run test:postgres`.
+  PGlite es Postgres 18 de verdad dentro de Node. Para confirmar que no cayó en
+  SQLite: el primer test de cada archivo tarda ~1,4 s, y `db.motor` es `postgres`.
+- **Simular Vercel:** cargar `api/index.js` y servirlo con `http.createServer`,
+  con `VERCEL=1` y `DATABASE_URL=pglite:memoria`. Así se prueban el arranque en
+  frío, la tarea `/api/cron/clima` (va con `CRON_SECRET`, no con la clave del
+  panel) y el rechazo de fotos cuando no hay Supabase Storage.
+- **El despliegue real** responde `{"error":"Falta configurar DATABASE_URL en Vercel."}`
+  en `/api/salud` mientras no tenga base. Ese 503 sale del código: si llega, la
+  construcción pasó, la reescritura llega a la función y Node cargó todo.
+- **Pasar datos a Supabase:** `scripts/pasar-a-supabase.js`. Para probarlo sin
+  Supabase: `DESTINO=pglite:<carpeta>`. Se niega si en línea ya hay registros del
+  negocio; sin `--reemplazar` solo mira.
+
 ## Trampas conocidas
+
+- **`$?` después de una tubería es el del último comando.** `node x.js | tail; echo $?`
+  muestra el código de `tail`, no el de node. Para ver el de verdad, redirigir a
+  `/dev/null` en vez de pasar por `tail`.
 
 - **Reiniciar el servidor después de editar `src/`.** Node cachea los módulos:
   un cambio en `src/resources.js` (p. ej. las `columnas` de una lista) no aparece

@@ -1,151 +1,139 @@
-# Poner Nández Café en línea (Render)
+# Poner Nández Café en línea (Vercel + Supabase)
 
-Objetivo: que usted y su hermano puedan registrar y consultar desde el celular,
-desde cualquier parte, sin depender de que el computador de la casa esté
-prendido.
+Objetivo: que Maick, Edwin y Camila puedan registrar y consultar desde el
+celular, desde cualquier parte, sin depender de que el computador de la casa
+esté prendido. Sin costo mensual: Vercel y Supabase en sus planes gratis.
 
-Costo: **US$7/mes** del servicio + **US$0,25/mes** del disco de 1 GB ≈ **29.000
-pesos al mes**.
+- **Vercel** sirve el panel y corre el servidor como funciones.
+- **Supabase** guarda la base de datos (Postgres).
 
-La configuración ya está lista en [render.yaml](render.yaml). Lo que sigue es lo
-que le toca a usted en el navegador.
+El código ya está preparado para las dos cosas. Lo que sigue es lo que le toca
+a usted en el navegador, en este orden.
 
 ---
 
-## 1. Subir el proyecto a GitHub
+## 1. Crear la base en Supabase
 
-El repositorio local ya está hecho, con el primer commit. Falta crear el
-repositorio remoto y empujarlo.
+1. En <https://supabase.com>, **New project**, en la misma organización de la
+   página web.
+2. Nombre: `nandez-cafe-inventario`.
+3. **Región: East US (North Virginia).** Es donde Vercel corre sus funciones;
+   si la base queda lejos, cada consulta cruza el continente.
+4. Ponga una contraseña larga para la base y **guárdela**.
+5. Cuando termine de crearse: botón **Connect** (arriba) → **Transaction
+   pooler**. Copie esa cadena: empieza con `postgresql://` y usa el puerto
+   **6543**. Es la que sirve para funciones que nacen y mueren con cada
+   petición.
+6. En el archivo `.env` del computador, agregue una línea:
 
-1. Entre a <https://github.com/new>.
-2. Nombre: `nandez-cafe`. **Privado** (es su contabilidad).
-3. **No** marque "Add a README", "Add .gitignore" ni licencia: el proyecto ya
-   los trae y chocarían.
-4. Cree el repositorio y copie la URL que le muestra.
+   ```
+   DATABASE_URL=postgresql://postgres.xxxx:SU_CONTRASEÑA@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
 
-Después, en la terminal del proyecto:
+   reemplazando `[YOUR-PASSWORD]` por la contraseña del paso 4. Ese archivo no
+   se sube a GitHub.
+
+## 2. Pasar lo que ya está registrado
+
+Lo registrado en el computador pasa a Supabase con un script. Primero, sin
+cambiar nada, para ver qué hay de cada lado:
 
 ```bash
-git remote add origin https://github.com/USUARIO/nandez-cafe.git
-git branch -M main
-git push -u origin main
+node --env-file=.env scripts/pasar-a-supabase.js
 ```
 
-Cambie `USUARIO` por su usuario de GitHub. Si le pide clave, GitHub ya no acepta
-la contraseña: hay que generar un token en
-<https://github.com/settings/tokens> (clásico, permiso `repo`) y pegarlo como
-contraseña.
+Si todo se ve bien, lo mismo con `--reemplazar` para copiar:
 
-**La base de datos no se sube**, y está bien: `.gitignore` excluye `data/`.
-Sus lotes y ventas se quedan en su computador. El servidor en línea crea su
-propia base y la siembra igual que la primera vez: la finca de 13 ha, el Lote 1,
-el Lote 2 y las 8 ideas de oportunidad. Lo que **no** llega es lo del café —
-el lote comprado, el productor y las presentaciones. Más abajo está cómo
-pasarlo.
-
-## 2. Crear el servicio en Render
-
-1. Entre a <https://render.com> y cree la cuenta (puede ser con GitHub).
-2. En el panel: **New** → **Blueprint**.
-3. Conecte su cuenta de GitHub y autorice el repositorio `nandez-cafe`.
-4. Render lee `render.yaml` solo y le muestra un servicio llamado
-   **nandez-cafe** con el disco de 1 GB. Confirme.
-5. Le pedirá la tarjeta, porque el plan Starter es de pago.
-6. **Apply** y espere. El primer despliegue toma unos minutos: instala las
-   dependencias y arranca el servidor.
-
-Cuando termine, Render le da una dirección del estilo
-`https://nandez-cafe.onrender.com`. Esa es la que se comparte.
-
-## 3. Copiar la clave de acceso
-
-Render generó una clave sola. Para verla:
-
-1. Entre al servicio **nandez-cafe**.
-2. Pestaña **Environment**.
-3. Busque `API_TOKEN` y cópiela.
-
-Es **distinta** de la que usa en su computador, y así debe ser: si alguna vez
-hay que cambiar la de internet, la local no se toca.
-
-### Y las claves de cada uno
-
-En la misma pestaña **Environment** hay una variable `USUARIOS`, vacía. Ahí va
-una clave por persona, para que cada registro quede con nombre:
-
-```
-Maick:CLAVE1,Edwin Hernandez:CLAVE2,Camila Hernandez:CLAVE3
+```bash
+node --env-file=.env scripts/pasar-a-supabase.js --reemplazar
 ```
 
-Sin espacios alrededor de las comas; los nombres sí pueden llevar espacios. Las
-tres claves ya están generadas en el archivo `.env` de su computador: cópielas
-de ahí. El nombre es el que queda escrito en cada registro, así que si alguna
-vez cambia un nombre, los registros viejos se quedan con el anterior.
+El script tiene barandas: copia todo en una sola transacción (o pasa completo o
+no pasa nada), conserva los ids, y al final compara tabla por tabla. **Si
+Supabase ya tiene lotes, ventas, gastos o cualquier registro hecho por alguien,
+se niega**: lo único que acepta reemplazar es lo que el sistema siembra solo al
+arrancar.
 
-Guarde y Render reinicia el servicio solo.
+Desde ese momento, **registre solo en línea**. Si siguen registrando en el
+computador, las dos bases se separan.
 
-Cada uno entra con **su** clave, no con la compartida. Cuando confirme que los
-tres entran bien, **borre `API_TOKEN`** del panel: así ningún registro queda sin
-nombre.
+## 3. Variables en Vercel
+
+En el proyecto de Vercel → **Settings** → **Environment Variables**, agregue
+estas cuatro, para *Production* (copie los valores de su `.env`):
+
+| Variable | Valor |
+|---|---|
+| `DATABASE_URL` | la cadena de Supabase del paso 1 |
+| `USUARIOS` | `Maick:…,Edwin Hernandez:…,Camila Hernandez:…` — la línea completa del `.env` |
+| `CRON_SECRET` | la del `.env`; es la clave de la tarea diaria del clima |
+| `API_TOKEN` | **no la ponga**. En línea conviene que cada uno entre con su clave, así ningún registro queda sin nombre |
+
+Después: **Deployments** → el último → **⋯** → **Redeploy**. Las variables
+nuevas solo se aplican en un despliegue nuevo.
 
 ## 4. Entrar desde los celulares
 
-1. Abra `https://nandez-cafe.onrender.com` en el celular.
-2. El panel muestra la pantalla **Clave de acceso**.
-3. Pegue la clave y toque **Entrar**. Queda guardada en ese celular; no la vuelve
-   a pedir.
+La dirección es la de Vercel: `https://nandez-cafe-inventario.vercel.app`.
+Cada uno abre su enlace con su clave:
 
-Lo mismo en el celular de su hermano. La misma clave sirve para los dos.
+```
+https://nandez-cafe-inventario.vercel.app/?token=SU_CLAVE
+```
 
-## 5. Pasar lo que ya tiene registrado
-
-El servidor en línea arranca con la finca y sus dos lotes ya sembrados, pero sin
-nada del café que usted compra. Hoy eso es poco: un lote, cuatro presentaciones
-y un productor. Lo más sencillo es volver a registrarlo a mano desde el panel en
-línea, son unos minutos:
-
-- **Finca → Productores:** el productor al que le compró, con su municipio.
-- **Café → Lotes:** DT-2026-01, 2026-10-21, compra, castillo, pergamino seco,
-  51 kg, $22.000/kg (valor total $1.122.000).
-- **Café → Presentaciones:** las cuatro bolsas, con su costo de empaque y precio
-  cuando los tenga.
-
-De ahí en adelante registre siempre en el de internet, para no terminar con dos
-contabilidades distintas. Cuando confirme que todo está en línea, deje de usar
-el local.
+Entra directo, la clave queda guardada en ese celular y se borra de la
+dirección. Mande a cada uno **solo su enlace**: si se pasan el archivo
+completo, cada uno queda con las claves de los otros.
 
 ---
 
-## Lo que falta decidir
+## Fotos y documentos (opcional)
 
-**Respaldos: bájelos usted.** El disco de Render guarda el archivo entre
-despliegues, pero el plan Starter no le hace copias. En el inicio del panel, en
-la tarjeta **Qué hay registrado**, hay un enlace **⬇ Descargar respaldo**: le
-entrega toda la base en un archivo `.sqlite` consistente, listo para guardar en
-el computador o en la nube. Hágalo al menos una vez por semana, y siempre
-después de un día de mucho registro.
+Vercel no tiene disco propio: lo que se escribe ahí desaparece. Por eso, en
+línea, las fotos van a **Supabase Storage**. Mientras no esté configurado, el
+panel **rechaza la foto con un aviso** en vez de aceptarla y perderla.
 
-Para volver de un respaldo: pare el servicio en Render, suba el archivo al disco
-como `/data/cafe.db` (pestaña **Shell** del servicio) y vuelva a arrancarlo.
-Todavía no hay un botón para restaurar; se hace a mano y conviene practicarlo
-una vez antes de necesitarlo.
+Para activarlo:
 
-Lo que falta para no depender de acordarse: una tarea programada que baje la
-copia sola. Pendiente.
+1. En Supabase → **Storage** → **New bucket** → nombre `adjuntos`, **privado**.
+2. En Supabase → **Project Settings** → **API**: copie la **Project URL** y la
+   clave **service_role** (la secreta, no la `anon`).
+3. En Vercel, dos variables más: `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`.
+   Redeploy.
 
-**Una clave por persona: ya está.** Cada lote, proceso, venta y gasto queda
-marcado con el nombre de quien lo registró, según la clave con la que entró. Se
-ve en las listas de Procesos y de Ventas, en la columna *Registrado por*. No se
-puede cambiar después ni escribir a mano. Falta configurarlo en Render (arriba).
+La clave `service_role` salta todas las restricciones de Supabase: va solo en
+Vercel, nunca en el panel ni en un mensaje.
+
+En línea, el tope es **4 MB por foto**: Vercel corta a los 4,5 MB antes de que
+la petición llegue al sistema.
+
+---
+
+## Lo que hay que saber de los planes gratis
+
+- **Supabase gratis no hace copias de seguridad.** En el inicio del panel, en
+  *Qué hay registrado*, está **⬇ Descargar respaldo**: baja toda la base en un
+  archivo `.sqlite`. Hágalo cada semana y después de un día de mucho registro.
+  Ese archivo además sirve para volver a levantar el sistema en el computador.
+- **Supabase gratis pausa el proyecto tras una semana sin uso.** Con tres
+  personas registrando no pasa; en temporada baja, se reactiva desde el panel
+  de Supabase.
+- **Vercel gratis (Hobby) solo permite tareas programadas una vez al día.** El
+  clima se sincroniza cada mañana a las 6 a. m. hora de Colombia, no cada 3
+  horas como en el computador.
+- **Vercel gratis es para uso no comercial.** Esta app no cobra a visitantes ni
+  muestra publicidad, es una herramienta interna; aun así, es zona gris.
 
 ## Si algo sale mal
 
-- **El despliegue falla en `npm ci`:** revise que `package-lock.json` esté
-  subido (sí lo está) y que Render use Node 24 (`NODE_VERSION` ya lo fija).
-- **Responde "Token inválido o ausente":** la clave está mal copiada. Vuelva a
-  copiarla de Environment, completa y sin espacios.
-- **El panel carga pero sin su café:** normal al principio. El servidor en línea
-  tiene su propia base, sembrada con la finca y los dos lotes, pero sin el lote
-  comprado ni las presentaciones: hay que registrarlos allá (paso 5).
-- **Cambió algo en el código:** con `git push` Render vuelve a desplegar solo.
-- **Ver qué pasó:** pestaña **Logs** del servicio en Render.
+- **El panel carga pero dice "Falta configurar DATABASE_URL en Vercel":** falta
+  la variable, o se agregó sin hacer Redeploy.
+- **"El servidor no pudo conectarse a la base de datos":** revise la cadena:
+  puerto 6543, la contraseña puesta en lugar de `[YOUR-PASSWORD]`, y que el
+  proyecto de Supabase no esté pausado. El detalle está en Vercel →
+  **Logs**.
+- **"Token inválido o ausente":** la clave está mal copiada, o se puso la de
+  otra persona. Ver `USUARIOS` en Vercel.
+- **El panel no muestra el café que registró en el computador:** falta el paso
+  2.
+- **Cambió algo en el código:** con `git push`, Vercel vuelve a desplegar solo.
